@@ -38,7 +38,7 @@ If you want to prepare the finetuning data yourself, make sure you follow the fo
 
 We have to binarize the data to make it ready to be trained. To binarize the training data for finetuning, run:
 
-`./command/clr_multifield/preprocess_any.sh`
+`python command/clr_multifield/preprocess_any.py`
 
 The binarized training data ready for finetuning (for function boundary) will be stored at `data-bin/clr_multifield_any`
 
