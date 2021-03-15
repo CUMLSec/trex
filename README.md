@@ -27,9 +27,9 @@ Finally, enter the trex root directory: e.g., `path/to/trex`, and install trex:
 
 Create the `checkpoints` and `checkpoints/pretrain` subdirectory in `path/to/trex`
 
-`mkdir checkpoints`, `mkdir checkpoints/pretrain_all`
+`mkdir checkpoints`, `mkdir checkpoints/pretrain`
 
-Download our [pretrained weight parameters](https://drive.google.com/file/d/1eVnlqUvii6tKC1LKYL0dQ_x-4d0LrgA6/view?usp=sharing) and put in `checkpoints/pretrain`
+Download our [pretrained weight parameters](https://drive.google.com/file/d/1OixLeIqGgY0Oo50ebByGcEShr2SeZ4WM/view?usp=sharing) and put in `checkpoints/pretrain`
 
 ### Sample data for finetuning similarity
 
@@ -40,7 +40,7 @@ We have to binarize the data to make it ready to be trained. To binarize the tra
 
 `python command/clr_multifield/preprocess_any.py`
 
-The binarized training data ready for finetuning (for function boundary) will be stored at `data-bin/clr_multifield_any`
+The binarized training data ready for finetuning (for detecting similarity) will be stored at `data-bin/clr_multifield_any`
 
 ## Training
 
@@ -50,9 +50,24 @@ To finetune the model, run:
 
 The scripts loads the pretrained weight parameters from `checkpoints/pretrain/` and finetunes the model.
 
+### Sample data for pretraining on micro-traces
+
+We also provide (10K) samples and scripts to demonstrate how to pretrain the model. To binarize the training data for pretraining, run:
+
+`python command/roberta_multifield/preprocess_pretrain_10k.py`
+
+The binarized training data ready for pretraining will be stored at `data-bin/pretrain_10k`
+
+To pretrain the model, run:
+
+`./command/roberta_multifield/pretrain_10k.sh`
+
+The pretrained model will be checkpointed at `checkpoints/pretrain_10k`
+
+
 ## Dataset
 
-We put our dataset in the anonymized [link](https://drive.google.com/drive/folders/1FXlrGiZkch9bnAxlrm43IhYGC3r5NveA?usp=sharing).
+We put our dataset [here](https://drive.google.com/drive/folders/1FXlrGiZkch9bnAxlrm43IhYGC3r5NveA?usp=sharing).
 
 ## References
 
