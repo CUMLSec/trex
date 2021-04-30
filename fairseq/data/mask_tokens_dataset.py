@@ -102,6 +102,15 @@ class MaskTokensDataset(BaseWrapperDataset):
             item = self.dataset[index]
             sz = len(item)
 
+            # ignore the dummy values when masking
+            if '##' in self.vocab:
+                real_bytes = \
+                    torch.where(
+                        (item != self.vocab.index('##')) & (item != self.vocab.bos()) & (item != self.vocab.eos()))[
+                        0].cpu().numpy()
+                # print(item.size())
+                # exit()
+
             assert self.mask_idx not in item, \
                 'Dataset contains mask_idx (={}), this is not expected!'.format(
                     self.mask_idx,
@@ -117,10 +126,33 @@ class MaskTokensDataset(BaseWrapperDataset):
 
             # decide elements to mask
             mask = np.full(sz, False)
+
+            if '##' in self.vocab:
+                num_mask = int(
+                    # add a random number for probabilistic rounding
+                    self.mask_prob * len(real_bytes) + np.random.rand()
+                )
+
+
+                if num_mask > 0:
+                    mask[np.random.choice(real_bytes, num_mask, replace=False)] = True
+                else:
+                    # all ## cases, we select only one location to make this task trivial
+                    mask[np.random.choice(sz, 1, replace=False)] = True
+            else:
+                num_mask = int(
+                    # add a random number for probabilistic rounding
+                    self.mask_prob * sz + np.random.rand()
+                )
+                mask[np.random.choice(sz, num_mask, replace=False)] = True
+
+            '''
             num_mask = int(
                 # add a random number for probabilistic rounding
                 self.mask_prob * sz + np.random.rand()
             )
+
+            
             if random.random() > configs.min_chunk_len / sz + configs.chunk_mask_relax:
                 # FIXME: mask chunks, longer consecutive sequence
                 mask_indices_med = np.random.choice(np.arange(sz)[1:-1], int(num_mask / 3), replace=False)
@@ -132,6 +164,7 @@ class MaskTokensDataset(BaseWrapperDataset):
             else:
                 # FIXME:: Original non-consecutive implementation
                 mask[np.random.choice(sz, num_mask, replace=False)] = True
+            '''
 
             if self.return_masked_tokens:
                 # exit early if we're just returning the masked tokens

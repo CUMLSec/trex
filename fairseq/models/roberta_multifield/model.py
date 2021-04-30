@@ -250,7 +250,7 @@ class RobertaClassificationHead(nn.Module):
         self.out_proj = nn.Linear(inner_dim, num_classes)
 
     def forward(self, features, **kwargs):
-        x = features[:, 0, :]  # take <s> token (equiv. to [CLS])
+        x = features[:, 0, :]  # take <s> token (equiv. to [CLS]) [batch x seq x dim]
         x = self.dropout(x)
         x = self.dense(x)
         x = self.activation_fn(x)
