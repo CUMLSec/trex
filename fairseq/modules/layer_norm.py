@@ -16,7 +16,11 @@ try:
     class FusedLayerNorm(_FusedLayerNorm):
         @torch.jit.unused
         def forward(self, x):
-            return super().forward(x)
+            if not x.is_cuda:
+                return super().forward(x)
+            else:
+                with torch.cuda.device(x.device):
+                    return super().forward(x)
 
 
 except ImportError:
@@ -24,6 +28,8 @@ except ImportError:
 
 
 def LayerNorm(normalized_shape, eps=1e-5, elementwise_affine=True, export=False):
+    if torch.jit.is_scripting():
+        export = True
     if not export and torch.cuda.is_available() and has_fused_layernorm:
         return FusedLayerNorm(normalized_shape, eps, elementwise_affine)
     return torch.nn.LayerNorm(normalized_shape, eps, elementwise_affine)

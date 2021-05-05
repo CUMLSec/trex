@@ -4,14 +4,14 @@
 # LICENSE file in the root directory of this source tree.
 
 
-import torch
-from torch import nn
-
 from typing import List
+
+import torch
+from fairseq.modules.quant_noise import quant_noise
+from torch import nn
 
 
 class AdaptiveInput(nn.Module):
-
     def __init__(
         self,
         vocab_size: int,
@@ -20,14 +20,17 @@ class AdaptiveInput(nn.Module):
         factor: float,
         output_dim: int,
         cutoff: List[int],
+        q_noise: float = 0,
+        qn_block_size: int = 8,
     ):
         super().__init__()
 
         if vocab_size > cutoff[-1]:
             cutoff = cutoff + [vocab_size]
         else:
-            assert vocab_size == cutoff[
-                -1], 'cannot specify cutoff larger than vocab size'
+            assert (
+                vocab_size == cutoff[-1]
+            ), "cannot specify cutoff larger than vocab size"
 
         self.cutoff = cutoff
         self.embedding_dim = output_dim
@@ -40,8 +43,11 @@ class AdaptiveInput(nn.Module):
             dim = int(initial_dim // (factor ** i))
             seq = nn.Sequential(
                 nn.Embedding(size, dim, self.padding_idx),
-                nn.Linear(dim, output_dim, bias=False)
+                quant_noise(
+                    nn.Linear(dim, output_dim, bias=False), q_noise, qn_block_size
+                ),
             )
+
             self.embeddings.append(seq)
             self.padding_idx = None
         self.padding_idx = padding_idx
@@ -50,12 +56,12 @@ class AdaptiveInput(nn.Module):
             if isinstance(m, nn.Embedding):
                 nn.init.normal_(m.weight, mean=0, std=m.weight.shape[1] ** -0.5)
                 nn.init.constant_(m.weight[padding_idx], 0)
-            elif hasattr(m, 'weight'):
+            elif hasattr(m, "weight"):
                 nn.init.xavier_uniform_(m.weight)
 
         self.apply(init_weights)
 
-        self.register_buffer('_float_tensor', torch.FloatTensor(1))
+        self.register_buffer("_float_tensor", torch.FloatTensor(1))
 
     def weights_for_band(self, band: int):
         return self.embeddings[band][0].weight, self.embeddings[band][1].weight

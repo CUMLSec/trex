@@ -8,24 +8,26 @@ from collections import Counter
 from multiprocessing import Pool
 
 import torch
+from fairseq import utils
 from fairseq.binarizer import safe_readline
 from fairseq.data import data_utils
 from fairseq.file_io import PathManager
 from fairseq.tokenizer import tokenize_line
 
 
-class Dictionary(object):
+class Dictionary:
     """A mapping from symbols to consecutive integers"""
 
     def __init__(
         self,
+        *,  # begin keyword-only arguments
+        bos="<s>",
         pad="<pad>",
         eos="</s>",
         unk="<unk>",
-        bos="<s>",
         extra_special_symbols=None,
     ):
-        self.unk_word, self.pad_word, self.eos_word = unk, pad, eos
+        self.bos_word, self.unk_word, self.pad_word, self.eos_word = bos, unk, pad, eos
         self.symbols = []
         self.count = []
         self.indices = {}
@@ -60,29 +62,48 @@ class Dictionary(object):
             return self.indices[sym]
         return self.unk_index
 
-    def string(self, tensor, bpe_symbol=None, escape_unk=False):
+    def string(
+        self,
+        tensor,
+        bpe_symbol=None,
+        escape_unk=False,
+        extra_symbols_to_ignore=None,
+        unk_string=None,
+        include_eos=False,
+        separator=" ",
+    ):
         """Helper for converting a tensor of token indices to a string.
 
         Can optionally remove BPE symbols or escape <unk> words.
         """
         if torch.is_tensor(tensor) and tensor.dim() == 2:
-            return "\n".join(self.string(t, bpe_symbol, escape_unk) for t in tensor)
+            return "\n".join(
+                self.string(t, bpe_symbol, escape_unk, extra_symbols_to_ignore, include_eos=include_eos)
+                for t in tensor
+            )
+
+        extra_symbols_to_ignore = set(extra_symbols_to_ignore or [])
+        extra_symbols_to_ignore.add(self.eos())
 
         def token_string(i):
             if i == self.unk():
-                return self.unk_string(escape_unk)
+                if unk_string is not None:
+                    return unk_string
+                else:
+                    return self.unk_string(escape_unk)
             else:
                 return self[i]
 
         if hasattr(self, "bos_index"):
-            sent = " ".join(
-                token_string(i)
-                for i in tensor
-                if (i != self.eos()) and (i != self.bos())
-            )
-        else:
-            sent = " ".join(token_string(i) for i in tensor if i != self.eos())
-        return data_utils.process_bpe_symbol(sent, bpe_symbol)
+            extra_symbols_to_ignore.add(self.bos())
+
+        sent = separator.join(
+            token_string(i)
+            for i in tensor
+            if utils.item(i) not in extra_symbols_to_ignore
+        )
+
+        return data_utils.post_process(sent, bpe_symbol)
 
     def unk_string(self, escape=False):
         """Return unknown string, optionally escaped as: <<unk>>"""
@@ -91,9 +112,9 @@ class Dictionary(object):
         else:
             return self.unk_word
 
-    def add_symbol(self, word, n=1):
+    def add_symbol(self, word, n=1, overwrite=False):
         """Adds a word to the dictionary"""
-        if word in self.indices:
+        if word in self.indices and not overwrite:
             idx = self.indices[word]
             self.count[idx] = self.count[idx] + n
             return idx
@@ -202,7 +223,7 @@ class Dictionary(object):
         """
         if isinstance(f, str):
             try:
-                with PathManager.open(f, "r", encoding="utf-8") as fd:
+                with open(PathManager.get_local_path(f), "r", encoding="utf-8") as fd:
                     self.add_from_file(fd)
             except FileNotFoundError as fnfe:
                 raise fnfe
@@ -215,17 +236,30 @@ class Dictionary(object):
 
         lines = f.readlines()
         indices_start_line = self._load_meta(lines)
+
         for line in lines[indices_start_line:]:
-            idx = line.rfind(" ")
-            if idx == -1:
+            try:
+                line, field = line.rstrip().rsplit(" ", 1)
+                if field == "#fairseq:overwrite":
+                    overwrite = True
+                    line, field = line.rsplit(" ", 1)
+                else:
+                    overwrite = False
+                count = int(field)
+                word = line
+                if word in self and not overwrite:
+                    raise RuntimeError(
+                        "Duplicate word found when loading Dictionary: '{}'. "
+                        "Duplicate words can overwrite earlier ones by adding the "
+                        "#fairseq:overwrite flag at the end of the corresponding row "
+                        "in the dictionary file. If using the Camembert model, please "
+                        "download an updated copy of the model file.".format(word)
+                    )
+                self.add_symbol(word, n=count, overwrite=overwrite)
+            except ValueError:
                 raise ValueError(
-                    "Incorrect dictionary format, expected '<token> <cnt>'"
+                    "Incorrect dictionary format, expected '<token> <cnt> [flags]'"
                 )
-            word = line[:idx]
-            count = int(line[idx + 1 :])
-            self.indices[word] = len(self.symbols)
-            self.symbols.append(word)
-            self.count.append(count)
 
     def _save(self, f, kv_iterator):
         if isinstance(f, str):
@@ -265,7 +299,7 @@ class Dictionary(object):
         consumer=None,
         append_eos=True,
         reverse_order=False,
-    ):
+    ) -> torch.IntTensor:
         words = line_tokenizer(line)
         if reverse_order:
             words = list(reversed(words))
@@ -302,7 +336,13 @@ class Dictionary(object):
                 for word in tokenize(line):
                     counter.update([word])
                 counter.update([eos_word])
-                if f.tell() > end:
+                # f.tell() returns only an opaque number which can
+                # return to the position in the file via f.seek()
+                # and does not necessarily represent a byte position
+                # in the file. However, f.tell() is faithful to the
+                # byte position _most of the time_. Thus we can just
+                # check against the file size to prevent early exit.
+                if f.tell() > end and f.tell() < size:
                     break
                 line = f.readline()
         return counter

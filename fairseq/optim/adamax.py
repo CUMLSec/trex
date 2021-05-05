@@ -6,11 +6,11 @@
 import torch
 import torch.optim
 
-from . import FairseqOptimizer, register_optimizer
+from . import LegacyFairseqOptimizer, register_optimizer
 
 
-@register_optimizer('adamax')
-class FairseqAdamax(FairseqOptimizer):
+@register_optimizer("adamax")
+class FairseqAdamax(LegacyFairseqOptimizer):
     def __init__(self, args, params):
         super().__init__(args)
         self._optimizer = Adamax(params, **self.optimizer_config)
@@ -38,11 +38,11 @@ class FairseqAdamax(FairseqOptimizer):
         different learning rate.
         """
         return {
-            'lr': self.args.lr[0],
-            'betas': eval(self.args.adamax_betas),
-            'eps': self.args.adamax_eps,
-            'weight_decay': self.args.weight_decay,
-            'bias_correction': not self.args.no_bias_correction,
+            "lr": self.args.lr[0],
+            "betas": eval(self.args.adamax_betas),
+            "eps": self.args.adamax_eps,
+            "weight_decay": self.args.weight_decay,
+            "bias_correction": not self.args.no_bias_correction,
         }
 
 
@@ -53,7 +53,7 @@ class Adamax(torch.optim.Optimizer):
 
     Compared to the version in PyTorch, this version implements a fix for weight decay.
 
-    Arguments:
+    Args:
         params (iterable): iterable of parameters to optimize or dicts defining
             parameter groups
         lr (float, optional): learning rate (default: 2e-3)
@@ -67,8 +67,15 @@ class Adamax(torch.optim.Optimizer):
     __ https://arxiv.org/abs/1412.6980
     """
 
-    def __init__(self, params, lr=2e-3, betas=(0.9, 0.999), eps=1e-8,
-                 weight_decay=0, bias_correction=True):
+    def __init__(
+        self,
+        params,
+        lr=2e-3,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+        weight_decay=0,
+        bias_correction=True,
+    ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -80,8 +87,13 @@ class Adamax(torch.optim.Optimizer):
         if not 0.0 <= weight_decay:
             raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
 
-        defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay,
-                        bias_correction=bias_correction)
+        defaults = dict(
+            lr=lr,
+            betas=betas,
+            eps=eps,
+            weight_decay=weight_decay,
+            bias_correction=bias_correction,
+        )
         super(Adamax, self).__init__(params, defaults)
 
     @property
@@ -95,7 +107,7 @@ class Adamax(torch.optim.Optimizer):
     def step(self, closure=None):
         """Performs a single optimization step.
 
-        Arguments:
+        Args:
             closure (callable, optional): A closure that reevaluates the model
                 and returns the loss.
         """
@@ -104,34 +116,36 @@ class Adamax(torch.optim.Optimizer):
             loss = closure()
 
         for group in self.param_groups:
-            for p in group['params']:
+            for p in group["params"]:
                 if p.grad is None:
                     continue
                 grad = p.grad.data.float()
                 if grad.is_sparse:
-                    raise RuntimeError('Adamax does not support sparse gradients')
+                    raise RuntimeError("Adamax does not support sparse gradients")
 
-                p_data_fp32 = p.data.float()
+                p_data_fp32 = p.data
+                if p.data.dtype in {torch.float16, torch.bfloat16}:
+                    p_data_fp32 = p_data_fp32.float()
 
                 state = self.state[p]
 
                 # State initialization
                 if len(state) == 0:
-                    state['step'] = 0
-                    state['exp_avg'] = torch.zeros_like(p_data_fp32)
-                    state['exp_inf'] = torch.zeros_like(p_data_fp32)
+                    state["step"] = 0
+                    state["exp_avg"] = torch.zeros_like(p_data_fp32)
+                    state["exp_inf"] = torch.zeros_like(p_data_fp32)
                 else:
-                    state['exp_avg'] = state['exp_avg'].type_as(p_data_fp32)
-                    state['exp_inf'] = state['exp_inf'].type_as(p_data_fp32)
+                    state["exp_avg"] = state["exp_avg"].to(p_data_fp32)
+                    state["exp_inf"] = state["exp_inf"].to(p_data_fp32)
 
-                exp_avg, exp_inf = state['exp_avg'], state['exp_inf']
-                beta1, beta2 = group['betas']
-                eps = group['eps']
+                exp_avg, exp_inf = state["exp_avg"], state["exp_inf"]
+                beta1, beta2 = group["betas"]
+                eps = group["eps"]
 
-                state['step'] += 1
+                state["step"] += 1
 
                 # Update biased first moment estimate.
-                exp_avg.mul_(beta1).add_(1 - beta1, grad)
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
 
                 # Update the exponentially weighted infinity norm.
                 torch.max(
@@ -140,16 +154,19 @@ class Adamax(torch.optim.Optimizer):
                     out=exp_inf,
                 )
 
-                step_size = group['lr']
-                if group['bias_correction']:
-                    bias_correction = 1 - beta1 ** state['step']
+                step_size = group["lr"]
+                if group["bias_correction"]:
+                    bias_correction = 1 - beta1 ** state["step"]
                     step_size /= bias_correction
 
-                if group['weight_decay'] != 0:
-                    p_data_fp32.add_(-group['weight_decay'] * group['lr'], p_data_fp32)
+                if group["weight_decay"] != 0:
+                    p_data_fp32.add_(
+                        p_data_fp32, alpha=-group["weight_decay"] * group["lr"]
+                    )
 
-                p_data_fp32.addcdiv_(-step_size, exp_avg, exp_inf.add(eps))
+                p_data_fp32.addcdiv_(exp_avg, exp_inf.add(eps), value=-step_size)
 
-                p.data.copy_(p_data_fp32)
+                if p.data.dtype in {torch.float16, torch.bfloat16}:
+                    p.data.copy_(p_data_fp32)
 
         return loss

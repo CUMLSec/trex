@@ -53,7 +53,7 @@ class GumbelVectorQuantizer(nn.Module):
         num_groups = groups if not combine_groups else 1
 
         self.vars = nn.Parameter(torch.FloatTensor(1, num_groups * num_vars, var_dim))
-        nn.init.xavier_normal_(self.vars)
+        nn.init.uniform_(self.vars)
 
         if weight_proj_depth > 1:
 
@@ -70,8 +70,13 @@ class GumbelVectorQuantizer(nn.Module):
             )
         else:
             self.weight_proj = nn.Linear(self.input_dim, groups * num_vars)
+            nn.init.normal_(self.weight_proj.weight, mean=0, std=1)
+            nn.init.zeros_(self.weight_proj.bias)
 
-        assert len(temp) == 3, temp
+        if isinstance(temp, str):
+            import ast
+            temp = ast.literal_eval(temp)
+        assert len(temp) == 3, f"{temp}, {len(temp)}"
 
         self.max_temp, self.min_temp, self.temp_decay = temp
         self.curr_temp = self.max_temp
@@ -82,7 +87,7 @@ class GumbelVectorQuantizer(nn.Module):
             self.max_temp * self.temp_decay ** num_updates, self.min_temp
         )
 
-    def codebook(self):
+    def get_codebook_indices(self):
         if self.codebook_indices is None:
             from itertools import product
 
@@ -99,12 +104,35 @@ class GumbelVectorQuantizer(nn.Module):
                 for b in range(1, self.groups):
                     self.codebook_indices[:, b] += self.num_vars * b
                 self.codebook_indices = self.codebook_indices.flatten()
+        return self.codebook_indices
 
+    def codebook(self):
+        indices = self.get_codebook_indices()
         return (
             self.vars.squeeze(0)
-            .index_select(0, self.codebook_indices)
+            .index_select(0, indices)
             .view(self.num_vars ** self.groups, -1)
         )
+
+    def sample_from_codebook(self, b, n):
+        indices = self.get_codebook_indices()
+        indices = indices.view(-1, self.groups)
+        cb_size = indices.size(0)
+        assert (
+            n < cb_size
+        ), f"sample size {n} is greater than size of codebook {cb_size}"
+        sample_idx = torch.randint(low=0, high=cb_size, size=(b * n,))
+        indices = indices[sample_idx]
+
+        z = self.vars.squeeze(0).index_select(0, indices.flatten()).view(b, n, -1)
+        return z
+
+    def to_codebook_index(self, indices):
+        res = indices.new_full(indices.shape[:-1], 0)
+        for i in range(self.groups):
+            exponent = self.groups - i - 1
+            res += indices[..., i] * (self.num_vars ** exponent)
+        return res
 
     def forward_idx(self, x):
         res = self.forward(x, produce_targets=True)

@@ -5,17 +5,11 @@
 
 import torch
 import torch.nn.functional as F
-
 from fairseq import utils
 from fairseq.iterative_refinement_generator import DecoderOut
 from fairseq.models import register_model, register_model_architecture
+from fairseq.models.nat import FairseqNATDecoder, FairseqNATModel, ensemble_decoder
 from fairseq.models.transformer import Embedding
-
-from fairseq.models.nat import (
-    FairseqNATModel,
-    FairseqNATDecoder,
-    ensemble_decoder
-)
 from fairseq.modules.transformer_sentence_encoder import init_bert_params
 
 
@@ -48,7 +42,6 @@ def _uniform_assignment(src_lens, trg_lens):
 
 @register_model("nonautoregressive_transformer")
 class NATransformerModel(FairseqNATModel):
-
     @property
     def allow_length_beam(self):
         return True
@@ -58,14 +51,26 @@ class NATransformerModel(FairseqNATModel):
         FairseqNATModel.add_args(parser)
 
         # length prediction
-        parser.add_argument("--src-embedding-copy", action="store_true",
-                            help="copy encoder word embeddings as the initial input of the decoder")
-        parser.add_argument("--pred-length-offset", action="store_true",
-                            help="predicting the length difference between the target and source sentences")
-        parser.add_argument("--sg-length-pred", action="store_true",
-                            help="stop the gradients back-propagated from the length predictor")
-        parser.add_argument("--length-loss-factor", type=float,
-                            help="weights on the length prediction loss")
+        parser.add_argument(
+            "--src-embedding-copy",
+            action="store_true",
+            help="copy encoder word embeddings as the initial input of the decoder",
+        )
+        parser.add_argument(
+            "--pred-length-offset",
+            action="store_true",
+            help="predicting the length difference between the target and source sentences",
+        )
+        parser.add_argument(
+            "--sg-length-pred",
+            action="store_true",
+            help="stop the gradients back-propagated from the length predictor",
+        )
+        parser.add_argument(
+            "--length-loss-factor",
+            type=float,
+            help="weights on the length prediction loss",
+        )
 
     @classmethod
     def build_decoder(cls, args, tgt_dict, embed_tokens):
@@ -81,25 +86,33 @@ class NATransformerModel(FairseqNATModel):
         encoder_out = self.encoder(src_tokens, src_lengths=src_lengths, **kwargs)
 
         # length prediction
-        length_out = self.decoder.forward_length(normalize=False, encoder_out=encoder_out)
-        length_tgt = self.decoder.forward_length_prediction(length_out, encoder_out, tgt_tokens)
+        length_out = self.decoder.forward_length(
+            normalize=False, encoder_out=encoder_out
+        )
+        length_tgt = self.decoder.forward_length_prediction(
+            length_out, encoder_out, tgt_tokens
+        )
 
         # decoding
         word_ins_out = self.decoder(
             normalize=False,
             prev_output_tokens=prev_output_tokens,
-            encoder_out=encoder_out)
+            encoder_out=encoder_out,
+        )
 
         return {
             "word_ins": {
-                "out": word_ins_out, "tgt": tgt_tokens,
-                "mask": tgt_tokens.ne(self.pad), "ls": self.args.label_smoothing,
-                "nll_loss": True
+                "out": word_ins_out,
+                "tgt": tgt_tokens,
+                "mask": tgt_tokens.ne(self.pad),
+                "ls": self.args.label_smoothing,
+                "nll_loss": True,
             },
             "length": {
-                "out": length_out, "tgt": length_tgt,
-                "factor": self.decoder.length_loss_factor
-            }
+                "out": length_out,
+                "tgt": length_tgt,
+                "factor": self.decoder.length_loss_factor,
+            },
         }
 
     def forward_decoder(self, decoder_out, encoder_out, decoding_format=None, **kwargs):
@@ -126,14 +139,14 @@ class NATransformerModel(FairseqNATModel):
             output_tokens=output_tokens,
             output_scores=output_scores,
             attn=None,
-            history=history
+            history=history,
         )
 
     def initialize_output_tokens(self, encoder_out, src_tokens):
         # length prediction
         length_tgt = self.decoder.forward_length_prediction(
             self.decoder.forward_length(normalize=True, encoder_out=encoder_out),
-            encoder_out=encoder_out
+            encoder_out=encoder_out,
         )
 
         max_length = length_tgt.clamp_(min=2).max()
@@ -150,7 +163,7 @@ class NATransformerModel(FairseqNATModel):
 
         initial_output_scores = initial_output_tokens.new_zeros(
             *initial_output_tokens.size()
-        ).type_as(encoder_out.encoder_out)
+        ).type_as(encoder_out["encoder_out"][0])
 
         return DecoderOut(
             output_tokens=initial_output_tokens,
@@ -158,13 +171,17 @@ class NATransformerModel(FairseqNATModel):
             attn=None,
             step=0,
             max_step=0,
-            history=None
+            history=None,
         )
 
     def regenerate_length_beam(self, decoder_out, beam_size):
         output_tokens = decoder_out.output_tokens
         length_tgt = output_tokens.ne(self.pad).sum(1)
-        length_tgt = length_tgt[:, None] + utils.new_arange(length_tgt, 1, beam_size) - beam_size // 2
+        length_tgt = (
+            length_tgt[:, None]
+            + utils.new_arange(length_tgt, 1, beam_size)
+            - beam_size // 2
+        )
         length_tgt = length_tgt.view(-1).clamp_(min=2)
         max_length = length_tgt.max()
         idx_length = utils.new_arange(length_tgt, max_length)
@@ -183,8 +200,7 @@ class NATransformerModel(FairseqNATModel):
         ).type_as(decoder_out.output_scores)
 
         return decoder_out._replace(
-            output_tokens=initial_output_tokens,
-            output_scores=initial_output_scores
+            output_tokens=initial_output_tokens, output_scores=initial_output_scores
         )
 
 
@@ -217,8 +233,11 @@ class NATransformerDecoder(FairseqNATDecoder):
 
     @ensemble_decoder
     def forward_length(self, normalize, encoder_out):
-        enc_feats = encoder_out.encoder_out  # T x B x C
-        src_masks = encoder_out.encoder_padding_mask  # B x T or None
+        enc_feats = encoder_out["encoder_out"][0]  # T x B x C
+        if len(encoder_out["encoder_padding_mask"]) > 0:
+            src_masks = encoder_out["encoder_padding_mask"][0]  # B x T
+        else:
+            src_masks = None
         enc_feats = _mean_pooling(enc_feats, src_masks)
         if self.sg_length_pred:
             enc_feats = enc_feats.detach()
@@ -248,8 +267,11 @@ class NATransformerDecoder(FairseqNATDecoder):
         """
         # embedding
         if embedding_copy:
-            src_embd = encoder_out.encoder_embedding
-            src_mask = encoder_out.encoder_padding_mask
+            src_embd = encoder_out["encoder_embedding"][0]
+            if len(encoder_out["encoder_padding_mask"]) > 0:
+                src_mask = encoder_out["encoder_padding_mask"][0]
+            else:
+                src_mask = None
             src_mask = (
                 ~src_mask
                 if src_mask is not None
@@ -281,8 +303,15 @@ class NATransformerDecoder(FairseqNATDecoder):
 
             x, attn, _ = layer(
                 x,
-                encoder_out.encoder_out if encoder_out is not None else None,
-                encoder_out.encoder_padding_mask if encoder_out is not None else None,
+                encoder_out["encoder_out"][0]
+                if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
+                else None,
+                encoder_out["encoder_padding_mask"][0]
+                if (
+                    encoder_out is not None
+                    and len(encoder_out["encoder_padding_mask"]) > 0
+                )
+                else None,
                 self_attn_mask=None,
                 self_attn_padding_mask=decoder_padding_mask,
             )
@@ -317,7 +346,7 @@ class NATransformerDecoder(FairseqNATDecoder):
 
         if positions is not None:
             x += positions
-        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.dropout_module(x)
         decoder_padding_mask = prev_output_tokens.eq(self.padding_idx)
         return x, decoder_padding_mask
 
@@ -337,8 +366,11 @@ class NATransformerDecoder(FairseqNATDecoder):
         return copied_embedding
 
     def forward_length_prediction(self, length_out, encoder_out, tgt_tokens=None):
-        enc_feats = encoder_out.encoder_out  # T x B x C
-        src_masks = encoder_out.encoder_padding_mask  # B x T or None
+        enc_feats = encoder_out["encoder_out"][0]  # T x B x C
+        if len(encoder_out["encoder_padding_mask"]) > 0:
+            src_masks = encoder_out["encoder_padding_mask"][0]  # B x T
+        else:
+            src_masks = None
         if self.pred_length_offset:
             if src_masks is None:
                 src_lengs = enc_feats.new_ones(enc_feats.size(1)).fill_(

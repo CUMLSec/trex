@@ -1,5 +1,15 @@
-fields = ['static', 'inst_emb', 'inst_pos_emb', 'arch_emb', 'byte1', 'byte2', 'byte3', 'byte4']
-byte_start_pos = 4
+static_field = 'static'
+inst_pos_field = 'inst_pos_emb'  # instruction positional embedding
+op_pos_field = 'op_pos_emb'  # opcode/operand positional embedding
+arch_field = 'arch_emb'
+byte_fields = [f'byte{i}' for i in range(1, 5)]
+
+maskable_fields = [static_field] + byte_fields
+aux_fields = [inst_pos_field] + [op_pos_field] + [arch_field]
+non_byte_fields = [static_field] + [inst_pos_field] + [op_pos_field] + [arch_field]
+fields = non_byte_fields + byte_fields
+
+byte_len = 4
 full_attn = False
 min_chunk_len = 20
 chunk_mask_relax = 0.9

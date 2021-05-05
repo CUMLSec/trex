@@ -1,13 +1,13 @@
 ## Introduction
 
-Trex is a tool to match semantically similar functions based on transfer learning. It extends Roberta encoder with masked language modeling objective [1] by supporting multi-field inputs and outputs.
+Trex is a tool to match semantically similar functions based on transfer learning. 
 
 ## Installation
 We recommend `conda` to setup the environment and install the required packages.
 
 First, create the conda environment,
 
-`conda create -n trex python=3.7 numpy scipy scikit-learn`
+`conda create -n trex python=3.8 numpy scipy scikit-learn`
 
 and activate the conda environment:
 
@@ -15,11 +15,25 @@ and activate the conda environment:
 
 Then, install the latest PyTorch (assume you have GPU):
 
-`conda install pytorch torchvision cudatoolkit=10.2 -c pytorch`
+`conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch -c nvidia`
 
-Finally, enter the trex root directory: e.g., `path/to/trex`, and install trex:
+Enter the trex root directory: e.g., `path/to/trex`, and install trex:
 
 `pip install --editable .`
+
+For large datasets install PyArrow: 
+
+`pip install pyarrow`
+
+For faster training install NVIDIA's apex library:
+
+``` bash
+git clone https://github.com/NVIDIA/apex
+cd apex
+pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" \
+  --global-option="--deprecated_fused_adam" --global-option="--xentropy" \
+  --global-option="--fast_multihead_attn" ./
+```
 
 ## Preparation
 
@@ -68,7 +82,3 @@ The pretrained model will be checkpointed at `checkpoints/pretrain_10k`
 ## Dataset
 
 We put our dataset [here](https://drive.google.com/drive/folders/1FXlrGiZkch9bnAxlrm43IhYGC3r5NveA?usp=sharing).
-
-## References
-
-[1] Liu, Yinhan, et al. "Roberta: A robustly optimized bert pretraining approach." arXiv preprint arXiv:1907.11692 (2019).

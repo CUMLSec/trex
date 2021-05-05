@@ -23,9 +23,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_TARGET_POSITIONS = 1024
 
 
-@register_model('hf_gpt2')
+@register_model("hf_gpt2")
 class HuggingFaceGPT2LanguageModel(FairseqLanguageModel):
-
     def __init__(self, decoder):
         super().__init__(decoder)
 
@@ -54,30 +53,20 @@ class HuggingFaceGPT2LanguageModel(FairseqLanguageModel):
 
 
 class HuggingFaceGPT2Decoder(FairseqIncrementalDecoder):
-
     def __init__(self, args, task):
-        super().__init__(task.target_dictionary)
-
         try:
-            # Prepend the transformers submodule to the path, so that
-            # it's prioritized over other installations. This allows
-            # making local changes in the submodule.
-            sys.path.insert(
-                0, os.path.join(os.path.dirname(__file__), 'transformers', 'src')
-            )
             from transformers import GPT2Config, GPT2LMHeadModel
         except ImportError:
             raise ImportError(
-                '\n\nPlease install huggingface/transformers with:'
-                '\n\n  pip install transformers'
-                '\n\nOr to make local edits, install the submodule:'
-                '\n\n  git submodule update --init '
-                'fairseq/models/huggingface/transformers'
+                "\n\nPlease install huggingface/transformers with:"
+                "\n\n  pip install transformers"
             )
+
+        super().__init__(task.target_dictionary)
 
         config = GPT2Config(
             vocab_size=len(task.target_dictionary),
-            n_positions=args.max_target_positions,
+            n_positions=args.max_target_positions + 1,
             n_ctx=args.max_target_positions,
             n_embd=args.embed_dim,
             n_layer=args.num_layers,
@@ -99,17 +88,18 @@ class HuggingFaceGPT2Decoder(FairseqIncrementalDecoder):
         prev_output_tokens,
         src_lengths=None,
         incremental_state: Optional[Dict[str, List[torch.Tensor]]] = None,
+        encoder_out=None,
     ):
         features = self.extract_features(prev_output_tokens, incremental_state)
         lm_logits = self.model.lm_head(features)
-        return (lm_logits, )
+        return (lm_logits,)
 
     def extract_features(
         self,
         prev_output_tokens,
         incremental_state: Optional[Dict[str, List[torch.Tensor]]] = None,
     ):
-        if incremental_state is not None:
+        if incremental_state:
             past = self.get_incremental_state("past")
         else:
             past = None
@@ -132,47 +122,47 @@ class HuggingFaceGPT2Decoder(FairseqIncrementalDecoder):
         )
         last_hidden_states = outputs[0]
 
-        if incremental_state is not None:
+        if incremental_state:
             self.set_incremental_state(incremental_state, "past", outputs[1])
 
         return last_hidden_states
 
     def max_positions(self):
-        return self.model.config.n_positions
+        return self.model.config.n_positions - 1
 
 
-@register_model_architecture('hf_gpt2', 'hf_gpt2')
+@register_model_architecture("hf_gpt2", "hf_gpt2")
 def default_architecture(args):
-    if getattr(args, 'max_target_positions', None) is None:
+    if getattr(args, "max_target_positions", None) is None:
         args.max_target_positions = getattr(
-            args, 'tokens_per_sample', DEFAULT_MAX_TARGET_POSITIONS
+            args, "tokens_per_sample", DEFAULT_MAX_TARGET_POSITIONS
         )
-    args.embed_dim = getattr(args, 'embed_dim', 768)
-    args.num_attention_heads = getattr(args, 'num_attention_heads', 12)
-    args.num_layers = getattr(args, 'num_layers', 12)
-    args.dropout = getattr(args, 'dropout', 0.1)
-    args.attention_dropout = getattr(args, 'attention_dropout', 0.1)
+    args.embed_dim = getattr(args, "embed_dim", 768)
+    args.num_attention_heads = getattr(args, "num_attention_heads", 12)
+    args.num_layers = getattr(args, "num_layers", 12)
+    args.dropout = getattr(args, "dropout", 0.1)
+    args.attention_dropout = getattr(args, "attention_dropout", 0.1)
 
 
-@register_model_architecture('hf_gpt2', 'hf_gpt2_medium')
+@register_model_architecture("hf_gpt2", "hf_gpt2_medium")
 def hf_gpt2_medium(args):
-    args.embed_dim = getattr(args, 'embed_dim', 1024)
-    args.num_attention_heads = getattr(args, 'num_attention_heads', 16)
-    args.num_layers = getattr(args, 'num_layers', 24)
+    args.embed_dim = getattr(args, "embed_dim", 1024)
+    args.num_attention_heads = getattr(args, "num_attention_heads", 16)
+    args.num_layers = getattr(args, "num_layers", 24)
     default_architecture(args)
 
 
-@register_model_architecture('hf_gpt2', 'hf_gpt2_large')
+@register_model_architecture("hf_gpt2", "hf_gpt2_large")
 def hf_gpt2_large(args):
-    args.embed_dim = getattr(args, 'embed_dim', 1280)
-    args.num_attention_heads = getattr(args, 'num_attention_heads', 20)
-    args.num_layers = getattr(args, 'num_layers', 36)
+    args.embed_dim = getattr(args, "embed_dim", 1280)
+    args.num_attention_heads = getattr(args, "num_attention_heads", 20)
+    args.num_layers = getattr(args, "num_layers", 36)
     default_architecture(args)
 
 
-@register_model_architecture('hf_gpt2', 'hf_gpt2_xl')
+@register_model_architecture("hf_gpt2", "hf_gpt2_xl")
 def hf_gpt2_xl(args):
-    args.embed_dim = getattr(args, 'embed_dim', 1600)
-    args.num_attention_heads = getattr(args, 'num_attention_heads', 25)
-    args.num_layers = getattr(args, 'num_layers', 48)
+    args.embed_dim = getattr(args, "embed_dim", 1600)
+    args.num_attention_heads = getattr(args, "num_attention_heads", 25)
+    args.num_layers = getattr(args, "num_layers", 48)
     default_architecture(args)

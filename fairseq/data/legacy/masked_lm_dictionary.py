@@ -11,14 +11,15 @@ class MaskedLMDictionary(Dictionary):
     Dictionary for Masked Language Modelling tasks. This extends Dictionary by
     adding the mask symbol.
     """
+
     def __init__(
         self,
-        pad='<pad>',
-        eos='</s>',
-        unk='<unk>',
-        mask='<mask>',
+        pad="<pad>",
+        eos="</s>",
+        unk="<unk>",
+        mask="<mask>",
     ):
-        super().__init__(pad, eos, unk)
+        super().__init__(pad=pad, eos=eos, unk=unk)
         self.mask_word = mask
         self.mask_index = self.add_symbol(mask)
         self.nspecial = len(self.symbols)
@@ -33,16 +34,17 @@ class BertDictionary(MaskedLMDictionary):
     Dictionary for BERT task. This extends MaskedLMDictionary by adding support
     for cls and sep symbols.
     """
+
     def __init__(
         self,
-        pad='<pad>',
-        eos='</s>',
-        unk='<unk>',
-        mask='<mask>',
-        cls='<cls>',
-        sep='<sep>'
+        pad="<pad>",
+        eos="</s>",
+        unk="<unk>",
+        mask="<mask>",
+        cls="<cls>",
+        sep="<sep>",
     ):
-        super().__init__(pad, eos, unk, mask)
+        super().__init__(pad=pad, eos=eos, unk=unk, mask=mask)
         self.cls_word = cls
         self.sep_word = sep
         self.cls_index = self.add_symbol(cls)

@@ -130,6 +130,10 @@ result/*
 
 # dataset
 data-raw/*
-#data-src/*
+figs/
 checkpoints/*
-data-bin/clr_multifield_any
+data-bin/
+data-src/data_structure
+
+command/draw
+command/data_structure

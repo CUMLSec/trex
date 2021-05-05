@@ -4,14 +4,16 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+
 import torch
+
 
 logger = logging.getLogger(__name__)
 
 
 class NanDetector:
     """
-        Detects the first NaN or Inf in forward and/or backward pass and logs, together with the module name
+    Detects the first NaN or Inf in forward and/or backward pass and logs, together with the module name
     """
 
     def __init__(self, model, forward=True, backward=True):
@@ -19,6 +21,7 @@ class NanDetector:
         self.fhooks = []
         self.forward = forward
         self.backward = backward
+        self.named_parameters = list(model.named_parameters())
         self.reset()
 
         for name, mod in model.named_modules():
@@ -29,6 +32,20 @@ class NanDetector:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        # Dump out all model gnorms to enable better debugging
+        norm = {}
+        gradients = {}
+        for name, param in self.named_parameters:
+            if param.grad is not None:
+                grad_norm = torch.norm(param.grad.data, p=2, dtype=torch.float32)
+                norm[name] = grad_norm.item()
+                if torch.isnan(grad_norm).any() or torch.isinf(grad_norm).any():
+                    gradients[name] = param.grad.data
+        if len(gradients) > 0:
+            logger.info("Detected nan/inf grad norm, dumping norms...")
+            logger.info(f"norms: {norm}")
+            logger.info(f"gradients: {gradients}")
+
         self.close()
 
     def add_hooks(self, module):
@@ -44,8 +61,10 @@ class NanDetector:
     def _detect(self, tensor, name, backward):
         err = None
         if (
-            tensor.numel() >= 2
-        ):  # single value tensors (like the loss) will not provide much info
+            torch.is_floating_point(tensor)
+            # single value tensors (like the loss) will not provide much info
+            and tensor.numel() >= 2
+        ):
             with torch.no_grad():
                 if torch.isnan(tensor).any():
                     err = "NaN"
@@ -66,7 +85,7 @@ class NanDetector:
                         f" input max: {inp.max().item()}, input min: {inp.min().item()}"
                     )
 
-                has_printed_attr = 'has_printed_b' if backward else 'has_printed_f'
+                has_printed_attr = "has_printed_b" if backward else "has_printed_f"
                 logger.warning(err)
                 setattr(self, has_printed_attr, True)
         elif isinstance(x, dict):

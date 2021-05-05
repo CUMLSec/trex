@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from fairseq.models import FairseqEncoder
+from .fairseq_encoder import FairseqEncoder
 
 
 class CompositeEncoder(FairseqEncoder):
@@ -43,7 +43,9 @@ class CompositeEncoder(FairseqEncoder):
     def reorder_encoder_out(self, encoder_out, new_order):
         """Reorder encoder output according to new_order."""
         for key in self.encoders:
-            encoder_out[key] = self.encoders[key].reorder_encoder_out(encoder_out[key], new_order)
+            encoder_out[key] = self.encoders[key].reorder_encoder_out(
+                encoder_out[key], new_order
+            )
         return encoder_out
 
     def max_positions(self):
