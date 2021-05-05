@@ -132,9 +132,7 @@ result/*
 data-raw/*
 figs/
 checkpoints/*
-data-bin/clr_multifield_any
-data-bin/data_structure
-data-bin/label_dict.txt
+data-bin/
 
 data-src/data_structure
 
