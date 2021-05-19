@@ -45,7 +45,7 @@ class SimilarityCriterion(FairseqCriterion):
 
         logits0, _ = model(
             **sample['net_input0'],
-            features_only=True
+            classification_head_name=self.args.classification_head_name
         )
         logits1, _ = model(
             **sample['net_input1'],
