@@ -47,20 +47,20 @@ Download our [pretrained weight parameters](https://drive.google.com/file/d/1Oix
 
 ### Sample data for finetuning similarity
 
-We provide the sample training/testing files of finetuning in `data-src/clr_multifield_any`
-If you want to prepare the finetuning data yourself, make sure you follow the format shown in `data-src/clr_multifield_any` (coming soon: tokenization script).
+We provide the sample training/testing files of finetuning in `data-src/similarity`
+If you want to prepare the finetuning data yourself, make sure you follow the format shown in `data-src/similarity` (coming soon: tokenization script).
 
 We have to binarize the data to make it ready to be trained. To binarize the training data for finetuning, run:
 
-`python command/clr_multifield/preprocess_any.py`
+`python command/finetune/preprocess.py`
 
-The binarized training data ready for finetuning (for detecting similarity) will be stored at `data-bin/clr_multifield_any`
+The binarized training data ready for finetuning (for detecting similarity) will be stored at `data-bin/similarity`
 
 ## Training
 
 To finetune the model, run:
 
-`./command/clr_multifield/finetune_any.sh`
+`./command/finetune/finetune.sh`
 
 The scripts loads the pretrained weight parameters from `checkpoints/pretrain/` and finetunes the model.
 
