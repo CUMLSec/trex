@@ -68,13 +68,13 @@ The scripts loads the pretrained weight parameters from `checkpoints/pretrain/` 
 
 We also provide (10K) samples and scripts to demonstrate how to pretrain the model. To binarize the training data for pretraining, run:
 
-`python command/roberta_multifield/preprocess_pretrain_10k.py`
+`python command/pretrain/preprocess_pretrain_10k.py`
 
 The binarized training data ready for pretraining will be stored at `data-bin/pretrain_10k`
 
 To pretrain the model, run:
 
-`./command/roberta_multifield/pretrain_10k.sh`
+`./command/pretrain/pretrain_10k.sh`
 
 The pretrained model will be checkpointed at `checkpoints/pretrain_10k`
 
