@@ -40,16 +40,16 @@ class SimilarityCriterion(FairseqCriterion):
         """
         assert (
                 hasattr(model, 'classification_heads')
-                and self.args.classification_head_name in model.classification_heads
+                and self.classification_head_name in model.classification_heads
         ), 'model must provide sentence classification head for --criterion=similarity'
 
         logits0, _ = model(
             **sample['net_input0'],
-            classification_head_name=self.args.classification_head_name
+            classification_head_name=self.classification_head_name
         )
         logits1, _ = model(
             **sample['net_input1'],
-            classification_head_name=self.args.classification_head_name
+            classification_head_name=self.classification_head_name
         )
         targets = model.get_targets(sample, [logits0]).view(-1)
         sample_size = targets.numel()

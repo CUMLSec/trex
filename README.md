@@ -43,7 +43,7 @@ Create the `checkpoints` and `checkpoints/pretrain` subdirectory in `path/to/tre
 
 `mkdir checkpoints`, `mkdir checkpoints/pretrain`
 
-Download our [pretrained weight parameters](https://drive.google.com/file/d/1OixLeIqGgY0Oo50ebByGcEShr2SeZ4WM/view?usp=sharing) and put in `checkpoints/pretrain`
+Download our [pretrained weight parameters](https://drive.google.com/file/d/1xNcW8r01_J2OTZFh1B0eOG5ikj73zhwe/view?usp=sharing) and put in `checkpoints/pretrain`
 
 ### Sample data for finetuning similarity
 
