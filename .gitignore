@@ -132,7 +132,8 @@ result/*
 data-raw/*
 figs/
 checkpoints/*
-data-bin/
+data-bin/label_dict.txt
+data-bin/similarity
 
 data-src/data_structure
 
