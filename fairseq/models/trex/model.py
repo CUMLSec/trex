@@ -437,6 +437,7 @@ class TrexSimilarityHead(nn.Module):
         x = self.activation_fn(x)
         x = self.dropout(x)
         x = self.out_proj(x)
+        x = F.normalize(x)
         return x
 
 

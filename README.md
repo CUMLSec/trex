@@ -7,7 +7,7 @@ We recommend `conda` to setup the environment and install the required packages.
 
 First, create the conda environment,
 
-`conda create -n trex python=3.8 numpy scipy scikit-learn`
+`conda create -n trex python=3.8 numpy scipy scikit-learn requests`
 
 and activate the conda environment:
 

@@ -56,6 +56,7 @@ class SimilarityCriterion(FairseqCriterion):
 
         loss = F.cosine_embedding_loss(logits0, logits1, targets, margin=configs.cosine_embedding_loss_margin,
                                        reduction='sum')
+
         # targets = targets.float()
         # loss = F.mse_loss(
         #     torch.cosine_similarity(logits0, logits1, dim=1),
@@ -118,6 +119,7 @@ class SimilarityCriterion(FairseqCriterion):
 
             preds = list(itertools.chain.from_iterable([log.get('preds', 0) for log in logging_outputs]))
             targets = list(itertools.chain.from_iterable([log.get('targets', 0) for log in logging_outputs]))
+
             if len(set(targets)) != 2:
                 auc = 1.
             else:
