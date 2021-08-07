@@ -9,7 +9,6 @@ trex = TrexModel.from_pretrained(f'checkpoints/similarity',
                                  data_name_or_path=f'data-bin/similarity')
 
 trex.eval()
-# stateformer.cuda(2)
 
 samples0 = {field: [] for field in configs.fields}
 samples1 = {field: [] for field in configs.fields}

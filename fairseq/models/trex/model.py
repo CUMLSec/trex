@@ -181,10 +181,24 @@ class TrexModel(FairseqEncoderModel):
 
         # byte combine
         parser.add_argument(
+            '--seq-combine',
+            default='sum',
+            choices=['sum', 'concat'],
+            help='strategies to combine the embeddings of 5 input sequences, default is sum')
+
+        # byte combine
+        parser.add_argument(
             '--input-combine',
             default='cnn',
-            choices=['cnn', 'sum', 'drop_bytes'],
+            choices=['cnn', 'sum'],
             help='strategies to combine the byte value input embeddings, default is char-level cnn (with highway networks)')
+
+        # drop fields
+        parser.add_argument(
+            '--drop-field',
+            default='none',
+            choices=['none', 'static', 'inst_pos_emb', 'op_pos_emb', 'arch_emb', 'bytes'],
+            help='ablation study only. drop selected input sequence')
 
     @classmethod
     def build_model(cls, args, task):

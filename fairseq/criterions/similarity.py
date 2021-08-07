@@ -112,10 +112,6 @@ class SimilarityCriterion(FairseqCriterion):
                 and 'ncorrect_pred' in logging_outputs[0] and 'ncorrect_actual' in logging_outputs[0] \
                 and 'ncorrect_total' in logging_outputs[0] \
                 and 'preds' in logging_outputs[0] and 'targets' in logging_outputs[0]:
-            ncorrect = sum(log.get('ncorrect', 0) for log in logging_outputs)
-            ncorrect_pred = sum(log.get('ncorrect_pred', 0) for log in logging_outputs)
-            ncorrect_actual = sum(log.get('ncorrect_actual', 0) for log in logging_outputs)
-            ncorrect_total = sum(log.get('ncorrect_total', 0) for log in logging_outputs)
 
             preds = list(itertools.chain.from_iterable([log.get('preds', 0) for log in logging_outputs]))
             targets = list(itertools.chain.from_iterable([log.get('targets', 0) for log in logging_outputs]))
@@ -125,6 +121,12 @@ class SimilarityCriterion(FairseqCriterion):
             else:
                 auc = roc_auc_score(targets, preds)
 
+            ''' F1 is messy as it depends on chosen threshold, don't use..
+            ncorrect = sum(log.get('ncorrect', 0) for log in logging_outputs)
+            ncorrect_pred = sum(log.get('ncorrect_pred', 0) for log in logging_outputs)
+            ncorrect_actual = sum(log.get('ncorrect_actual', 0) for log in logging_outputs)
+            ncorrect_total = sum(log.get('ncorrect_total', 0) for log in logging_outputs)
+            
             precision = 100 * ncorrect / (ncorrect_pred + 1e-5)
             recall = 100 * ncorrect / (ncorrect_actual + 1e-5)
 
@@ -132,6 +134,7 @@ class SimilarityCriterion(FairseqCriterion):
             metrics.log_scalar('precision', precision, nsentences, round=1)
             metrics.log_scalar('recall', recall, nsentences, round=1)
             metrics.log_scalar('F1', 2 * (precision * recall) / (precision + recall + 1e-5), nsentences, round=1)
+            '''
             metrics.log_scalar('AUC', auc, nsentences, round=4)
 
     @staticmethod

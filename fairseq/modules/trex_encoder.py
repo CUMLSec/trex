@@ -57,13 +57,11 @@ class TrexEncoder(FairseqEncoder):
 
         self.embed_tokens = embed_tokens
 
-        if not self.args.input_combine == 'drop_bytes':
-            self.embed_bytes = embed_bytes
+        if self.args.seq_combine == 'concat':
+            self.seq_agg = SeqCombineConcat(embed_dim)
 
         if self.args.input_combine == 'cnn':
             self.byte_combine = ByteCombineCNN(embed_dim, embed_dim)
-        elif self.args.input_combine == 'drop_bytes':
-            self.byte_combine = None
         else:  # input_combine == 'sum'
             self.byte_combine = ByteCombineSUM()
 
@@ -113,20 +111,48 @@ class TrexEncoder(FairseqEncoder):
         return layer
 
     def forward_embedding(self, src_tokens):
-        # embed tokens (static)
-        token_embedding = self.embed_tokens[configs.static_field](src_tokens[configs.static_field])
-        # embed auxiliary annotations (inst_pos, op_pos, arch)
-        for field in configs.aux_fields:
-            token_embedding += self.embed_tokens[field](src_tokens[field])
-
-        if self.byte_combine is not None:
+        if self.args.seq_combine == 'concat':
+            token_embeddings = []
+            # embed tokens (static)
+            token_embeddings.append(self.embed_tokens[configs.static_field](src_tokens[configs.static_field]))
+            # embed auxiliary annotations (inst_pos, op_pos, arch)
+            for field in configs.aux_fields:
+                token_embeddings.append(self.embed_tokens[field](src_tokens[field]))
+            # embed bytes
             byte_embedding_stack = []
             for field in configs.byte_fields:
                 byte_embedding_stack.append(self.embed_bytes(src_tokens[field]))
             byte_embedding = self.byte_combine(torch.stack(byte_embedding_stack, dim=2))
 
-            x = embed = self.embed_scale * (token_embedding + byte_embedding)
+            token_embeddings.append(byte_embedding)
+
+            token_embeddings_agg = self.seq_agg(torch.cat(token_embeddings, dim=-1))
+            x = embed = self.embed_scale * token_embeddings_agg
+
         else:
+            # embed tokens (static)
+            token_embedding = None
+            if self.args.drop_field != 'static':
+                token_embedding = self.embed_tokens[configs.static_field](src_tokens[configs.static_field])
+            # embed auxiliary annotations (inst_pos, op_pos, arch)
+            if token_embedding is None:
+                token_embedding = self.embed_tokens['inst_pos_emb'](src_tokens['inst_pos_emb'])
+            else:
+                if self.args.drop_field != 'inst_pos_emb':
+                    token_embedding += self.embed_tokens['inst_pos_emb'](src_tokens['inst_pos_emb'])
+
+            if self.args.drop_field != 'op_pos_emb':
+                token_embedding += self.embed_tokens['op_pos_emb'](src_tokens['op_pos_emb'])
+            if self.args.drop_field != 'arch_emb':
+                token_embedding += self.embed_tokens['arch_emb'](src_tokens['arch_emb'])
+
+            if self.args.drop_field != 'bytes':
+                byte_embedding_stack = []
+                for field in configs.byte_fields:
+                    byte_embedding_stack.append(self.embed_bytes(src_tokens[field]))
+                byte_embedding = self.byte_combine(torch.stack(byte_embedding_stack, dim=2))
+                token_embedding += byte_embedding
+
             x = embed = self.embed_scale * token_embedding
 
         if self.layernorm_embedding is not None:
@@ -366,6 +392,16 @@ class ByteCombineCNN(nn.Module):
         x = x.view(B, T, -1)
 
         return x
+
+
+class SeqCombineConcat(nn.Module):
+    def __init__(self, output_dim):
+        super().__init__()
+        self.projection = nn.Linear(output_dim * 5, output_dim)
+
+    def forward(self, x):
+        # expect input of size [Batch x Seq x (5 x Emb_dim)]
+        return self.projection(x)
 
 
 class ByteCombineSUM(nn.Module):

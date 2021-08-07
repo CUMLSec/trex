@@ -28,7 +28,7 @@ CUDA_VISIBLE_DEVICES=0 python train.py data-bin/similarity \
   --encoder-layers $ENCODER_LAYERS --encoder-embed-dim $ENCODER_EMB_DIM --encoder-attention-heads $ENCODER_ATTENTION_HEADS \
   --best-checkpoint-metric AUC --maximize-best-checkpoint-metric \
   --find-unused-parameters \
-  --no-epoch-checkpoints --update-freq 4 --log-format=json --log-interval 10 \
+  --no-epoch-checkpoints --update-freq 4 --log-format=json --log-interval 10 --max-sentences-valid 32 \
   --save-dir $SIMILARITY_PATH \
   --memory-efficient-fp16 \
   --restore-file $SIMILARITY_PATH/checkpoint_best.pt | tee result/similarity
