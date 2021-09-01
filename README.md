@@ -48,7 +48,9 @@ Download our [pretrained weight parameters](https://drive.google.com/file/d/1xNc
 ### Sample data for finetuning similarity
 
 We provide the sample training/testing files of finetuning in [here](https://drive.google.com/drive/folders/1JHq_O1MiQhKBMnmzOjDgDh1r-TUY-jcl?usp=sharing). Download them ad put in `data-src/similarity`.
-If you want to prepare the finetuning data yourself, make sure you follow the format shown in `data-src/similarity`. The pipeline of data processing should follow `command/pretrain/prepare_json` (read the raw binary, e.g., elf, and obtain the raw bytes for each function), `command/pretrain/prepare_json` (read the raw binary, e.g., elf, and save the raw bytes for each function in `data-raw/funcbytes`), `command/finetune/prepare_finetune_trace.py` (take `data-raw/funcbytes` as input and generate function code+dummy traces in `data-raw/functraces`), and `command/finetune/prepare_finetune.py` (generate the actual finetuning dataset in `data-src/similarity).
+If you want to prepare the finetuning data yourself, make sure you follow the format shown in `data-src/similarity`. 
+
+The pipeline of data processing should follow `command/pretrain/prepare_json.py` (read the raw binary, e.g., elf, and obtain the raw bytes for each function and save them in `data-raw/funcbytes`), `command/finetune/prepare_finetune_trace.py` (take `data-raw/funcbytes` as input and generate function code+dummy traces in `data-raw/functraces` for finetuning), and `command/finetune/prepare_finetune.py` (generate the actual finetuning dataset in `data-src/similarity).
 
 We have to binarize the data to make it ready to be trained. To binarize the training data for finetuning, run:
 
