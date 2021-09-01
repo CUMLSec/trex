@@ -53,7 +53,7 @@ class Options():
         parser.add_argument('-opt_differ', '--opt_must_differ_flag', action='store_true', required=False, default=False)
         parser.add_argument('-opt_same', '--opt_must_same_flag', action='store_true', required=False, default=False)
         parser.add_argument('-i', '--functraces_folder_path', type=str, required=False, default='data-raw/functraces')
-        parser.add_argument('-o', '--output_folder_path', type=str, required=False, default='data-src/clr_multifield')
+        parser.add_argument('-o', '--output_folder_path', type=str, required=False, default='data-src/similarity')
         parser.add_argument('-trunc', '--tokens_truncate_flag', action='store_true', required=False, default=False)
         parser.add_argument('-minlen', '--trace_min_len', type=int, required=False, default=50)
         # if the value is 10, then positive and negative training data 1:9, and these 9 negative pairs share the same
