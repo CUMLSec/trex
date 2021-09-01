@@ -47,8 +47,8 @@ Download our [pretrained weight parameters](https://drive.google.com/file/d/1xNc
 
 ### Sample data for finetuning similarity
 
-We provide the sample training/testing files of finetuning in `data-src/similarity`
-If you want to prepare the finetuning data yourself, make sure you follow the format shown in `data-src/similarity` (coming soon: tokenization script).
+We provide the sample training/testing files of finetuning in [here](https://drive.google.com/drive/folders/1JHq_O1MiQhKBMnmzOjDgDh1r-TUY-jcl?usp=sharing). Download them ad put in `data-src/similarity`.
+If you want to prepare the finetuning data yourself, make sure you follow the format shown in `data-src/similarity`. You can take a look at 
 
 We have to binarize the data to make it ready to be trained. To binarize the training data for finetuning, run:
 

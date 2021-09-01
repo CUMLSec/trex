@@ -102,8 +102,14 @@ def parse_objdump_output(s, arch='x86'):
 # opts = ['O0', 'O1', 'O2', 'O3', 'orig',
 #         'bcfobf', 'cffobf', 'splitobf', 'subobf', 'acdobf', 'indibran', 'strcry', 'funcwra']
 
-archs = ['x86', 'arm', 'mips']
-modes = ['32', '64']
+# archs = ['x86', 'arm', 'mips']
+# modes = ['32', '64']
+# opts = ['O0', 'O1', 'O2', 'O3', 'orig',
+#         'bcfobf', 'cffobf', 'splitobf', 'subobf', 'indibran']
+# opts = ['O0', 'O1', 'O2', 'O3']
+
+archs = ['x86']
+modes = ['64']
 # opts = ['O0', 'O1', 'O2', 'O3', 'orig',
 #         'bcfobf', 'cffobf', 'splitobf', 'subobf', 'indibran']
 opts = ['O0', 'O1', 'O2', 'O3']

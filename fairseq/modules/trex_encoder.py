@@ -53,6 +53,8 @@ class TrexEncoder(FairseqEncoder):
         # assume the padding will be the same for a sequences,
         self.padding_idx = embed_bytes.padding_idx
 
+        self.embed_bytes = embed_bytes
+
         self.max_source_positions = args.max_source_positions
 
         self.embed_tokens = embed_tokens

@@ -139,6 +139,11 @@ data-src/
 data-src/data_structure
 data-src/similarity
 
+# command
 command/draw
 command/data_structure
 command/finetune_*
+command/ablation
+#command/pretrain/compile.sh
+command/syntia
+command/finetune_diverse
