@@ -147,3 +147,4 @@ command/ablation
 #command/pretrain/compile.sh
 command/syntia
 command/finetune_diverse
+command/case

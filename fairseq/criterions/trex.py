@@ -32,10 +32,8 @@ class TrexLoss(FairseqCriterion):
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
-        masked_code = sample["target"]['tgt_tokens'][configs.static_field].ne(
-            self.padding_idx_dict[configs.static_field])
-        masked_value = sample["target"]['tgt_values'][configs.byte_fields[0]].ne(
-            self.padding_idx_dict[configs.byte_fields[0]])
+        masked_code = sample["target"][configs.static_field].ne(self.padding_idx_dict[configs.static_field])
+        masked_value = sample["target"][configs.byte_fields[0]].ne(1)
 
         # Rare: when all tokens are not masked, project all tokens.
         # We use torch.where to avoid device-to-host transfers,
@@ -64,14 +62,14 @@ class TrexLoss(FairseqCriterion):
         output = model(**sample["net_input"], masked_code=masked_code, masked_value=masked_value)[0]
 
         pred_logits_code, pred_value = output['code'], output['value']
-        targets_code, targets_value = sample["target"]["tgt_tokens"], sample["target"]["tgt_values"]
+        targets_code = sample["target"][configs.static_field]
 
         if masked_code is not None:
-            targets_code = targets_code[configs.static_field][masked_code]
+            targets_code = targets_code[masked_code]
 
         if masked_value is not None:
-            targets_value_stacked = torch.stack([targets_value[field][masked_value] for field in configs.byte_fields],
-                                                dim=1)
+            targets_value_stacked = torch.stack(
+                [sample["target"][field][masked_value] for field in configs.byte_fields], dim=1)
 
         sample_size_code = masked_code.int().sum()
         sample_size_value = masked_value.int().sum() * configs.byte_len
@@ -90,11 +88,11 @@ class TrexLoss(FairseqCriterion):
             reduction='sum'
         )
 
-        loss = code_loss + value_loss
+        loss = code_loss + configs.code_value_loss_alpha * value_loss
 
         if random.random() < 0.001:  # only randomly log some prediction in case screen flushing
             for i, field in enumerate(configs.byte_fields):
-                print(f'{field} tgt value:', targets_value[field][masked_value].view(-1)[5:10].tolist())
+                print(f'{field} tgt value:', sample["target"][field][masked_value].view(-1)[5:10].tolist())
                 print(f'{field} pred value:', pred_value[5:10, i].view(-1).tolist())
 
             targets_code_idx = targets_code.view(-1)[5:10]
@@ -126,7 +124,7 @@ class TrexLoss(FairseqCriterion):
 
         metrics.log_scalar("loss", loss_sum / sample_size, sample_size, round=3)
         metrics.log_scalar("code_loss", code_loss_sum / sample_size_code / math.log(2), sample_size_code, round=3)
-        metrics.log_scalar("valueloss", value_loss_sum / sample_size_value, sample_size_value, round=3)
+        metrics.log_scalar("value_loss_mse", value_loss_sum / sample_size_value, sample_size_value, round=3)
         metrics.log_derived("code_ppl", lambda meters: utils.get_perplexity(meters["code_loss"].avg))
 
     @staticmethod

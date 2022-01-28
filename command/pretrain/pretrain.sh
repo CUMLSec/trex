@@ -6,16 +6,16 @@ mkdir -p checkpoints/pretrain
 
 TOTAL_UPDATES=500000  # Total number of training steps
 WARMUP_UPDATES=10000  # Warmup the learning rate over this many updates
-PEAK_LR=5e-4          # Peak learning rate, adjust as needed, official suggested: 1e-4
+PEAK_LR=1e-4          # Peak learning rate, adjust as needed, official suggested: 1e-4
 TOKENS_PER_SAMPLE=512 # Max sequence length
 MAX_POSITIONS=512     # Num. positional embeddings (usually same as above)
 MAX_SENTENCES=32      # Number of sequences per batch (batch size)
-UPDATE_FREQ=32        # Increase the batch size 32x
+UPDATE_FREQ=2         # Increase the batch size 32x
 ENCODER_EMB_DIM=768
 ENCODER_LAYERS=8
 ENCODER_ATTENTION_HEADS=12
 
-CUDA_VISIBLE_DEVICES=0,1 python train.py \
+CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py \
   data-bin/pretrain \
   --task trex --criterion trex \
   --arch trex --sample-break-mode eos --tokens-per-sample $TOKENS_PER_SAMPLE \
@@ -26,7 +26,7 @@ CUDA_VISIBLE_DEVICES=0,1 python train.py \
   --max-update $TOTAL_UPDATES --log-format json --log-interval 10 \
   --no-epoch-checkpoints --save-dir checkpoints/pretrain/ \
   --encoder-layers $ENCODER_LAYERS --encoder-embed-dim $ENCODER_EMB_DIM --encoder-attention-heads $ENCODER_ATTENTION_HEADS \
-  --random-token-prob 0.2 --mask-prob 0.2 \
+  --random-token-prob 0.5 --mask-prob 0.2 \
   --memory-efficient-fp16 --batch-size-valid 32 \
   --restore-file checkpoints/pretrain/checkpoint_best.pt |
   tee result/pretrain

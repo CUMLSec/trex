@@ -23,7 +23,7 @@ class BytevalueDataset(BaseWrapperDataset):
 
     def __getitem__(self, index):
         item = self.dataset[index]
-        output = torch.zeros_like(item, dtype=torch.float16)
+        output = torch.ones_like(item, dtype=torch.float16)
         for i, idx in enumerate(item):
             if idx.item() not in self.real_bytes_idx:
                 output[i] = float(1)

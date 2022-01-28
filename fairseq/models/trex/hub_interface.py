@@ -35,7 +35,7 @@ class TrexHubInterface(nn.Module):
     def device(self):
         return self._float_tensor.device
 
-    def __process_token_dict(self, tokens: dict):
+    def process_token_dict(self, tokens: dict):
         token_fields = tokens.keys()
         assert len(token_fields) == len(configs.fields)
 
@@ -95,12 +95,12 @@ class TrexHubInterface(nn.Module):
         return sentence_dict
 
     def extract_features(self, tokens: dict) -> torch.Tensor:
-        tokens = self.__process_token_dict(tokens)
+        tokens = self.process_token_dict(tokens)
 
         features = self.model(
             tokens,
             features_only=True
-        )[0]
+        )[0]['features']
 
         return features  # just the last layer's features
 

@@ -141,9 +141,9 @@ class TrexTask(LegacyFairseqTask):
         paths = utils.split_paths(self.args.data)
         assert len(paths) > 0
 
+        mask_prob = self.args.mask_prob + (.8 - self.args.mask_prob) * (epoch - 1) / 20
         src_tokens = {}
         tgt_tokens = {}
-        tgt_values = {}
         for field in configs.fields:
             split_path = os.path.join(self.args.data, field, split)
 
@@ -188,7 +188,7 @@ class TrexTask(LegacyFairseqTask):
                     pad_idx=self.source_dictionary[field].pad(),
                     mask_idx=self.mask_idx_dict[field],
                     seed=self.args.seed,
-                    mask_prob=self.args.mask_prob,
+                    mask_prob=mask_prob,
                     leave_unmasked_prob=self.args.leave_unmasked_prob,
                     random_token_prob=self.args.random_token_prob,
                     freq_weighted_replacement=self.args.freq_weighted_replacement,
@@ -208,19 +208,13 @@ class TrexTask(LegacyFairseqTask):
                     pad_idx=self.source_dictionary[field].pad(),
                     mask_idx=self.mask_idx_dict[field],
                     seed=self.args.seed,
-                    mask_prob=self.args.mask_prob,
+                    mask_prob=mask_prob,
                     leave_unmasked_prob=self.args.leave_unmasked_prob,
                     random_token_prob=self.args.random_token_prob,
                     freq_weighted_replacement=self.args.freq_weighted_replacement,
                 )
-                src_tokens[field] = RightPadDataset(
-                    src_dataset_value,
-                    pad_idx=self.source_dictionary[field].pad()
-                )
-
-                # dummy tokens are treated as 1
-                # TODO: assert there should not be any dummy tokens here
-                tgt_values[field] = BytevalueDataset(tgt_dataset_value, self.source_dictionary[field])
+                src_tokens[field] = BytevalueDataset(src_dataset_value, self.source_dictionary[field])
+                tgt_tokens[field] = BytevalueDataset(tgt_dataset_value, self.source_dictionary[field])
             else:
                 src_tokens[field] = RightPadDataset(
                     dataset,
@@ -238,10 +232,7 @@ class TrexTask(LegacyFairseqTask):
                         "src_tokens": src_tokens,
                         "src_lengths": NumelDataset(src_dataset_code, reduce=False),
                     },
-                    "target": {
-                        "tgt_tokens": tgt_tokens,
-                        "tgt_values": tgt_values
-                    },
+                    "target": tgt_tokens,
                     "nsentences": NumSamplesDataset(),
                     "ntokens": NumelDataset(src_dataset_code, reduce=True),
                 },

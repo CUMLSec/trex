@@ -15,3 +15,4 @@ min_chunk_len = 20
 chunk_mask_relax = 0.9
 last_layer = -1
 cosine_embedding_loss_margin = 0.1
+code_value_loss_alpha = 10

@@ -9,6 +9,7 @@ import os
 import numpy as np
 
 from fairseq.data import (
+    BytevalueDataset,
     data_utils,
     Dictionary,
     IdDataset,
@@ -118,19 +119,24 @@ class SimilarityTask(LegacyFairseqTask):
                 input0[field] = TruncateDataset(input0[field], self.args.max_positions)
                 input1[field] = TruncateDataset(input1[field], self.args.max_positions)
 
+            if field in configs.byte_fields:
+                input0[field] = BytevalueDataset(input0[field], self.source_dictionary[field])
+                input1[field] = BytevalueDataset(input1[field], self.source_dictionary[field])
+            else:
+                input0[field] = RightPadDataset(input0[field], pad_idx=self.source_dictionary[field].pad())
+                input1[field] = RightPadDataset(input1[field], pad_idx=self.source_dictionary[field].pad())
+
         with data_utils.numpy_seed(self.args.seed):
             shuffle = np.random.permutation(len(input0[field]))
 
         dataset = {
             'id': IdDataset(),
             'net_input0': {
-                'src_tokens': {field: RightPadDataset(input0[field], pad_idx=self.source_dictionary[field].pad()) for
-                               field in configs.fields},
+                'src_tokens': {field: input0[field] for field in configs.fields},
                 'src_lengths': NumelDataset(input0[field], reduce=False),
             },
             'net_input1': {
-                'src_tokens': {field: RightPadDataset(input1[field], pad_idx=self.source_dictionary[field].pad()) for
-                               field in configs.fields},
+                'src_tokens': {field: input1[field] for field in configs.fields},
                 'src_lengths': NumelDataset(input1[field], reduce=False),
             },
             'nsentences': NumSamplesDataset(),
@@ -169,7 +175,8 @@ class SimilarityTask(LegacyFairseqTask):
         from fairseq import models
         model = models.build_model(args, self)
 
-        model.register_similarity_head(getattr(args, 'classification_head_name', 'similarity'))
+        model.register_similarity_head('similarity')
+        model.register_similarity_pair_head('similarity_pair', num_classes=2)
 
         return model
 

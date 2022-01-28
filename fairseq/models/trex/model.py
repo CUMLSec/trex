@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -17,10 +18,10 @@ from fairseq.models import (
     register_model,
     register_model_architecture,
 )
-from fairseq.modules.trex_encoder import DEFAULT_MIN_PARAMS_TO_WRAP, TrexEncoder
 from fairseq.modules import LayerNorm
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 from fairseq.modules.transformer_sentence_encoder import init_bert_params
+from fairseq.modules.trex_encoder import DEFAULT_MIN_PARAMS_TO_WRAP, TrexEncoder
 from .hub_interface import TrexHubInterface
 
 logger = logging.getLogger(__name__)
@@ -215,19 +216,19 @@ class TrexModel(FairseqEncoderModel):
 
     def forward(
             self,
-            src_tokens,
-            features_only=False,
-            return_all_hiddens=False,
-            classification_head_name=None,
-            **kwargs,
+            src_tokens: Dict[str, torch.Tensor],
+            features_only: bool = False,
+            return_all_hiddens: bool = False,
+            classification_head_name: Optional[str] = None
     ):
         if classification_head_name is not None:
             features_only = True
 
-        x, extra = self.encoder(src_tokens, features_only, return_all_hiddens, **kwargs)
+        x, extra = self.encoder(src_tokens, features_only, return_all_hiddens)
 
+        # hacky workaround to deal with torchscript 'unable to extract string literal'
         if classification_head_name is not None:
-            x = self.classification_heads[classification_head_name](x)
+            x = {'features': self.classification_heads['similarity'](x['features'])}
         return x, extra
 
     def get_normalized_probs(self, net_output, log_probs, sample=None):
@@ -239,7 +240,7 @@ class TrexModel(FairseqEncoderModel):
             return F.softmax(logits, dim=-1)
 
     def register_similarity_head(
-            self, name, num_classes=None, inner_dim=None, **kwargs
+            self, name, num_classes=None, inner_dim=None
     ):
         """Register a embedding transformation head for computing cosine similarity."""
         if name in self.classification_heads:
@@ -248,6 +249,7 @@ class TrexModel(FairseqEncoderModel):
                 logger.warning(f're-registering head {name} with inner_dim {inner_dim} (prev: {prev_inner_dim})')
 
         self.classification_heads[name] = TrexSimilarityHead(
+            # input_dim=self.args.encoder_embed_dim * 3,
             input_dim=self.args.encoder_embed_dim,
             activation_fn=self.args.pooler_activation_fn,
             pooler_dropout=self.args.pooler_dropout,
@@ -256,9 +258,32 @@ class TrexModel(FairseqEncoderModel):
             do_spectral_norm=self.args.spectral_norm_classification_head,
         )
 
-    @property
-    def supported_targets(self):
-        return {"self"}
+    def register_similarity_pair_head(
+            self, name, num_classes=None, inner_dim=None
+    ):
+        """Register a head for computing similarity of two embeddings."""
+        if name in self.classification_heads:
+            prev_num_classes = self.classification_heads[name].out_proj.out_features
+            prev_inner_dim = self.classification_heads[name].dense.out_features
+            if num_classes != prev_num_classes or inner_dim != prev_inner_dim:
+                logger.warning(
+                    're-registering head "{}" with out_dim {} (prev: {}) '
+                    "and inner_dim {} (prev: {})".format(
+                        name, num_classes, prev_num_classes, inner_dim, prev_inner_dim
+                    )
+                )
+        self.classification_heads[name] = TrexEmbeddingPairHead(
+            input_dim=self.args.encoder_embed_dim * 4,
+            inner_dim=inner_dim or self.args.encoder_embed_dim,
+            output_dim=num_classes,
+            activation_fn=self.args.pooler_activation_fn,
+            pooler_dropout=self.args.pooler_dropout,
+            do_spectral_norm=self.args.spectral_norm_classification_head,
+        )
+
+    # @property
+    # def supported_targets(self):
+    #     return {"self"}
 
     @classmethod
     def from_pretrained(
@@ -267,7 +292,6 @@ class TrexModel(FairseqEncoderModel):
             checkpoint_file="model.pt",
             data_name_or_path=".",
             bpe="gpt2",
-            **kwargs,
     ):
         from fairseq import hub_utils
 
@@ -277,8 +301,7 @@ class TrexModel(FairseqEncoderModel):
             data_name_or_path,
             archive_map=cls.hub_models(),
             bpe=bpe,
-            load_checkpoint_heads=True,
-            **kwargs,
+            load_checkpoint_heads=True
         )
 
         logger.info(x["args"])
@@ -373,11 +396,11 @@ class TrexLMClassificationHead(nn.Module):
         self.weight = weight
         self.bias = nn.Parameter(torch.zeros(output_dim))
 
-    def forward(self, features, masked_tokens=None, **kwargs):
+    def forward(self, features, masked_tokens: torch.Tensor):
         # Only project the masked tokens while training,
         # saves both memory and computation
-        if masked_tokens is not None:
-            features = features[masked_tokens, :]
+        # if masked_tokens is not None:
+        features = features[masked_tokens, :]
 
         x = self.dense(features)
         x = self.activation_fn(x)
@@ -402,11 +425,11 @@ class TrexLMValueRegressionHead(nn.Module):
         self.weight = weight
         self.bias = nn.Parameter(torch.zeros(output_dim))
 
-    def forward(self, features, masked_tokens=None, **kwargs):
+    def forward(self, features, masked_tokens):
         # Only project the masked tokens while training,
         # saves both memory and computation
-        if masked_tokens is not None:
-            features = features[masked_tokens, :]
+        # if masked_tokens is not None:
+        features = features[masked_tokens, :]
 
         x = self.dense(features)
         x = self.activation_fn(x)
@@ -444,14 +467,45 @@ class TrexSimilarityHead(nn.Module):
                 )
             self.out_proj = torch.nn.utils.spectral_norm(self.out_proj)
 
-    def forward(self, features, **kwargs):
-        x = torch.mean(features, dim=1)  # average pooling all word embeddings
+    def forward(self, features):
+        # CLS + mean pooling + max pooling
+        # x = torch.cat((features[:, 0, :], torch.mean(features, dim=1), torch.max(features, dim=1)[0]), dim=-1)
+        x = torch.mean(features, dim=1)
         x = self.dropout(x)
         x = self.dense(x)
         x = self.activation_fn(x)
         x = self.dropout(x)
         x = self.out_proj(x)
         x = F.normalize(x)
+        return x
+
+
+class TrexEmbeddingPairHead(nn.Module):
+    """Head for sentence-level embedding tasks (e.g., for detect embedding pair)."""
+
+    def __init__(
+            self,
+            input_dim,
+            inner_dim,
+            output_dim,
+            activation_fn,
+            pooler_dropout,
+            do_spectral_norm=False,
+    ):
+        super().__init__()
+        self.dense = nn.Linear(input_dim, inner_dim)
+        self.activation_fn = utils.get_activation_fn(activation_fn)
+        self.dropout = nn.Dropout(p=pooler_dropout)
+        self.out_proj = nn.Linear(inner_dim, output_dim)
+        if do_spectral_norm:
+            self.out_proj = torch.nn.utils.spectral_norm(self.out_proj)
+
+    def forward(self, concatenated_x):
+        x = self.dropout(concatenated_x)
+        x = self.dense(x)
+        x = self.activation_fn(x)
+        x = self.dropout(x)
+        x = self.out_proj(x)
         return x
 
 
@@ -473,10 +527,7 @@ class Encoder(FairseqEncoder):
             {field: self.build_embedding(len(dictionary[field]), args.encoder_embed_dim, dictionary[field].pad()) for
              field in configs.non_byte_fields})
 
-        embed_bytes = self.build_embedding(len(dictionary[configs.byte_fields[0]]), args.encoder_embed_dim,
-                                           dictionary[configs.byte_fields[0]].pad())
-
-        self.sentence_encoder = self.build_encoder(args, dictionary, embed_tokens, embed_bytes)
+        self.sentence_encoder = self.build_encoder(args, dictionary, embed_tokens)
 
         self.lm_code_head, self.lm_value_head = self.build_lm_head(
             embed_dim=args.encoder_embed_dim,
@@ -493,8 +544,8 @@ class Encoder(FairseqEncoder):
     def build_embedding(self, vocab_size, embedding_dim, padding_idx):
         return nn.Embedding(vocab_size, embedding_dim, padding_idx)
 
-    def build_encoder(self, args, dictionary, embed_tokens, embed_bytes):
-        encoder = TrexEncoder(args, dictionary, embed_tokens, embed_bytes)
+    def build_encoder(self, args, dictionary, embed_tokens):
+        encoder = TrexEncoder(args, dictionary, embed_tokens)
         encoder.apply(init_bert_params)
         return encoder
 
@@ -505,12 +556,11 @@ class Encoder(FairseqEncoder):
 
     def forward(
             self,
-            src_tokens,
-            features_only=False,
-            return_all_hiddens=False,
-            masked_code=None,
-            masked_value=None,
-            **unused,
+            src_tokens: Dict[str, torch.Tensor],
+            features_only: bool = False,
+            return_all_hiddens: bool = False,
+            masked_code: torch.Tensor = torch.tensor([]),
+            masked_value: torch.Tensor = torch.tensor([])
     ):
         """
         Args:
@@ -530,14 +580,12 @@ class Encoder(FairseqEncoder):
                   is a list of hidden states. Note that the hidden
                   states have shape `(src_len, batch, vocab)`.
         """
-        x, extra = self.extract_features(
-            src_tokens, return_all_hiddens=return_all_hiddens
-        )
+        x, extra = self.extract_features(src_tokens, return_all_hiddens=return_all_hiddens)
         if not features_only:
             x = self.output_layer(x, masked_code=masked_code, masked_value=masked_value)
         return x, extra
 
-    def extract_features(self, src_tokens, return_all_hiddens=False, **kwargs):
+    def extract_features(self, src_tokens: Dict[str, torch.Tensor], return_all_hiddens: bool = False):
         encoder_out = self.sentence_encoder(
             src_tokens,
             return_all_hiddens=return_all_hiddens,
@@ -545,12 +593,14 @@ class Encoder(FairseqEncoder):
         # T x B x C -> B x T x C
         features = encoder_out["encoder_out"][0].transpose(0, 1)
         inner_states = encoder_out["encoder_states"] if return_all_hiddens else None
-        return features, {"inner_states": inner_states}
 
-    def output_layer(self, features, masked_code=None, masked_value=None, **unused):
+        # for torchscript, has to be dictionary
+        return {'features': features}, {"inner_states": inner_states}
+
+    def output_layer(self, features: Dict[str, torch.Tensor], masked_code: torch.Tensor, masked_value: torch.Tensor):
         return {
-            'code': self.lm_code_head(features, masked_code),
-            'value': self.lm_value_head(features, masked_value)
+            'code': self.lm_code_head(features['features'], masked_code),
+            'value': self.lm_value_head(features['features'], masked_value)
         }
 
     def max_positions(self):

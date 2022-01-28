@@ -17,11 +17,12 @@
 #directory="putty-0.74"
 #directory="httpd-2.4.48"
 #directory="lynx2.8.9"
-directory="nginx-1.21.1"
+#directory="nginx-1.21.1"
+directory="openssl-1.0.2h"
 
 opts=(O0 O1 O2 O3)
 #archs=(x86-32 x86-64 arm-32 mips-32)
-archs=(x86-64)
+archs=(arm-32)
 #archs=(x86-32 x86-64)
 #archs=(arm-32 arm-64)
 #archs=(mips-32 mips-64)
@@ -38,18 +39,18 @@ for opt in ${opts[*]}; do
     cd "$directory"
 
     #nginx
-    mkdir install
-    if [[ $arch == "x86-32" ]]; then
-      ./configure --with-cc-opt="-$opt" LDFLAGS=-m32 TIME_T_32_BIT_OK=yes --prefix=/media/onetb/git_repos/bin2vec/data-raw/"$directory"/install
-    elif [[ $arch == "x86-64" ]]; then
-      ./configure --with-cc-opt="-$opt" --prefix=/media/onetb/git_repos/trex-release/data-raw/"$directory"/install
-    elif [[ $arch == "mips-32" ]]; then
-      ./configure --with-cc-opt="-$opt" CC=mips-linux-gnu-gcc --host=mips-linux-gnu --prefix=/media/onetb/git_repos/trex-release/data-raw/"$directory"/install
-    else
-      ./configure --with-cc-opt="-$opt" CC=arm-linux-gnueabi-gcc --host=arm-none-linux-gnueabi --prefix=/media/onetb/git_repos/trex-release/data-raw/"$directory"/install
-    fi
-    make -j8
-    make install
+    #    mkdir install
+    #    if [[ $arch == "x86-32" ]]; then
+    #      ./configure --with-cc-opt="-$opt" LDFLAGS=-m32 TIME_T_32_BIT_OK=yes --prefix=/media/onetb/git_repos/bin2vec/data-raw/"$directory"/install
+    #    elif [[ $arch == "x86-64" ]]; then
+    #      ./configure --with-cc-opt="-$opt" --prefix=/media/onetb/git_repos/trex-release/data-raw/"$directory"/install
+    #    elif [[ $arch == "mips-32" ]]; then
+    #      ./configure --with-cc-opt="-$opt" CC=mips-linux-gnu-gcc --host=mips-linux-gnu --prefix=/media/onetb/git_repos/trex-release/data-raw/"$directory"/install
+    #    else
+    #      ./configure --with-cc-opt="-$opt" CC=arm-linux-gnueabi-gcc --host=arm-none-linux-gnueabi --prefix=/media/onetb/git_repos/trex-release/data-raw/"$directory"/install
+    #    fi
+    #    make -j8
+    #    make install
 
     #lynx
     #    mkdir install
@@ -252,13 +253,16 @@ for opt in ${opts[*]}; do
     #    fi
 
     # arm openssl
-    #    mkdir /media/onetb/git_repos/bin2vec/data-raw/"$directory"/install
+#    mkdir /media/onetb/git_repos/trex-release/data-raw/case/raw_query/"$directory"/install
     #    sed -i "365 s/-O3 //" ./Configure #1.0.1u
+    sed -i "416 s/-O3 //" ./Configure #1.0.2h
     #    #    sed -i "355 s/-O3 //" ./Configure #1.0.1f
-    #    ./Configure linux-elf no-asm -"$opt" --cross-compile-prefix=arm-linux-gnueabi- --openssldir=/media/onetb/git_repos/bin2vec/data-raw/"$directory"/install
-    #    make -j8
-    #    make test
-    #    make install_sw
+    ./Configure linux-elf no-asm -shared -"$opt" --cross-compile-prefix=arm-linux-gnueabi-
+#    ./Configure linux-elf no-asm -shared -"$opt" --cross-compile-prefix=arm-linux-gnueabi- --openssldir=/media/onetb/git_repos/trex-release/data-raw/case/raw_query/"$directory"/install
+    make depend
+    make -j8
+#    make test
+#    make install_sw
 
     # mips
     #    export CFLAGS="-$opt "
@@ -300,7 +304,7 @@ for opt in ${opts[*]}; do
     #    cp install/bin/* ../bin/"$arch"/"$directory"-"$opt"/
 
     # findutils
-    cp install/sbin/* ../bin/"$arch"/"$directory"-"$opt"/
+#    cp install/sbin/* ../bin/"$arch"/"$directory"-"$opt"/
 
     # httpd
     #    cp install/bin/* ../bin/"$arch"/"$directory"-"$opt"/
@@ -310,7 +314,7 @@ for opt in ${opts[*]}; do
     #    cp install/bin/* ../bin/"$arch"/"$directory"-"$opt"/
 
     # openssl
-    #    cp ./install/bin/openssl ../bin/"$arch"/"$directory"-"$opt"/
+    cp ./install/bin/openssl ../bin/"$arch"/"$directory"-"$opt"/
 
     # busybox
     #    cp ./busybox ../bin/"$arch"/"$directory"-"$opt"/

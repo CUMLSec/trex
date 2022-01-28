@@ -38,8 +38,7 @@ class TrexEncoder(FairseqEncoder):
         embed_tokens (dict of torch.nn.Embedding): input embedding
     """
 
-    def __init__(self, args, dictionary, embed_tokens, embed_bytes):
-        self.args = args
+    def __init__(self, args, dictionary, embed_tokens):
         super().__init__(dictionary)
         self.register_buffer("version", torch.Tensor([3]))
 
@@ -48,24 +47,27 @@ class TrexEncoder(FairseqEncoder):
         )
         self.encoder_layerdrop = args.encoder_layerdrop
 
-        embed_dim = embed_bytes.embedding_dim
+        embed_dim = embed_tokens[configs.static_field].embedding_dim
 
         # assume the padding will be the same for a sequences,
-        self.padding_idx = embed_bytes.padding_idx
-
-        self.embed_bytes = embed_bytes
+        self.padding_idx = embed_tokens[configs.static_field].padding_idx
 
         self.max_source_positions = args.max_source_positions
 
         self.embed_tokens = embed_tokens
 
-        if self.args.seq_combine == 'concat':
+        if args.seq_combine == 'concat':
             self.seq_agg = SeqCombineConcat(embed_dim)
+        else:
+            self.seq_agg = None
 
-        if self.args.input_combine == 'cnn':
-            self.byte_combine = ByteCombineCNN(embed_dim, embed_dim)
+        if args.input_combine == 'cnn':
+            self.byte_combine = ByteCombineCNN(1, embed_dim)
         else:  # input_combine == 'sum'
             self.byte_combine = ByteCombineSUM()
+
+        # tailored for torchscript
+        self.drop_field = args.drop_field
 
         self.embed_scale = 1.0 if args.no_scale_embedding else math.sqrt(embed_dim)
 
@@ -97,6 +99,8 @@ class TrexEncoder(FairseqEncoder):
         else:
             self.layer_norm = None
 
+        self.byte_fields: Dict[str, torch.Tensor] = {byte_field: torch.tensor([]) for byte_field in configs.byte_fields}
+
     def build_encoder_layer(self, args):
         layer = TransformerEncoderLayer(args)
         checkpoint = getattr(args, "checkpoint_activations", False)
@@ -112,8 +116,8 @@ class TrexEncoder(FairseqEncoder):
         layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
         return layer
 
-    def forward_embedding(self, src_tokens):
-        if self.args.seq_combine == 'concat':
+    def forward_embedding(self, src_tokens: Dict[str, torch.Tensor]):
+        if self.seq_agg is not None:
             token_embeddings = []
             # embed tokens (static)
             token_embeddings.append(self.embed_tokens[configs.static_field](src_tokens[configs.static_field]))
@@ -122,8 +126,8 @@ class TrexEncoder(FairseqEncoder):
                 token_embeddings.append(self.embed_tokens[field](src_tokens[field]))
             # embed bytes
             byte_embedding_stack = []
-            for field in configs.byte_fields:
-                byte_embedding_stack.append(self.embed_bytes(src_tokens[field]))
+            for field in self.byte_fields:
+                byte_embedding_stack.append(src_tokens[field].unsqueeze(-1).type_as(token_embeddings[0]))
             byte_embedding = self.byte_combine(torch.stack(byte_embedding_stack, dim=2))
 
             token_embeddings.append(byte_embedding)
@@ -133,25 +137,26 @@ class TrexEncoder(FairseqEncoder):
 
         else:
             # embed tokens (static)
-            token_embedding = None
-            if self.args.drop_field != 'static':
+            if self.drop_field != 'static':
                 token_embedding = self.embed_tokens[configs.static_field](src_tokens[configs.static_field])
+            else:
+                token_embedding = torch.tensor([])
             # embed auxiliary annotations (inst_pos, op_pos, arch)
-            if token_embedding is None:
+            if len(token_embedding.size()) == 0:
                 token_embedding = self.embed_tokens['inst_pos_emb'](src_tokens['inst_pos_emb'])
             else:
-                if self.args.drop_field != 'inst_pos_emb':
+                if self.drop_field != 'inst_pos_emb':
                     token_embedding += self.embed_tokens['inst_pos_emb'](src_tokens['inst_pos_emb'])
 
-            if self.args.drop_field != 'op_pos_emb':
+            if self.drop_field != 'op_pos_emb':
                 token_embedding += self.embed_tokens['op_pos_emb'](src_tokens['op_pos_emb'])
-            if self.args.drop_field != 'arch_emb':
+            if self.drop_field != 'arch_emb':
                 token_embedding += self.embed_tokens['arch_emb'](src_tokens['arch_emb'])
 
-            if self.args.drop_field != 'bytes':
+            if self.drop_field != 'bytes':
                 byte_embedding_stack = []
-                for field in configs.byte_fields:
-                    byte_embedding_stack.append(self.embed_bytes(src_tokens[field]))
+                for field in self.byte_fields:
+                    byte_embedding_stack.append(src_tokens[field].unsqueeze(-1).type_as(token_embedding[0]))
                 byte_embedding = self.byte_combine(torch.stack(byte_embedding_stack, dim=2))
                 token_embedding += byte_embedding
 
@@ -166,13 +171,13 @@ class TrexEncoder(FairseqEncoder):
 
     def forward(
             self,
-            src_tokens,
+            src_tokens: Dict[str, torch.Tensor],
             src_lengths: Optional[torch.Tensor] = None,
             return_all_hiddens: bool = False,
     ):
         """
         Args:
-            src_tokens (LongTensor): dictionary of tokens in the source language of shape
+            src_tokens (Dict[str, torch.Tensor]): dictionary of tokens in the source language of shape
                 `(batch, src_len)`
             src_lengths (torch.LongTensor): lengths of each source sentence of
                 shape `(batch)`
@@ -201,7 +206,7 @@ class TrexEncoder(FairseqEncoder):
     # call the helper function from scriptable Subclass.
     def forward_scriptable(
             self,
-            src_tokens,
+            src_tokens: Dict[str, torch.Tensor],
             src_lengths: Optional[torch.Tensor] = None,
             return_all_hiddens: bool = False
     ):
@@ -227,8 +232,8 @@ class TrexEncoder(FairseqEncoder):
                   Only populated if *return_all_hiddens* is True.
         """
         # compute padding mask
-        encoder_padding_mask = src_tokens[configs.byte_fields[0]].eq(self.padding_idx)  # padding is from byte sequences
-        has_pads = (src_tokens[configs.byte_fields[0]].device.type == "xla" or encoder_padding_mask.any())
+        encoder_padding_mask = src_tokens[configs.static_field].eq(self.padding_idx)  # padding is from byte sequences
+        has_pads = (src_tokens[configs.static_field].device.type == "xla" or encoder_padding_mask.any())
 
         x, encoder_embedding = self.forward_embedding(src_tokens)
 
@@ -260,13 +265,15 @@ class TrexEncoder(FairseqEncoder):
         # `forward` so we use a dictionary instead.
         # TorchScript does not support mixed values so the values are all lists.
         # The empty list is equivalent to None.
+        src_lengths = src_tokens[configs.static_field] \
+            .ne(self.padding_idx).sum(dim=1, dtype=torch.int32).reshape(-1, 1).contiguous()
         return {
             "encoder_out": [x],  # T x B x C
             "encoder_padding_mask": [encoder_padding_mask],  # B x T
             "encoder_embedding": [encoder_embedding],  # B x T x C
             "encoder_states": encoder_states,  # List[T x B x C]
             "src_tokens": [],
-            "src_lengths": [],
+            "src_lengths": [src_lengths],
         }
 
     @torch.jit.export
@@ -345,7 +352,7 @@ class TrexEncoder(FairseqEncoder):
 
 class ByteCombineCNN(nn.Module):
     def __init__(self, embed_dim, output_dim, activation_fn='relu',
-                 filters=[(1, 64), (2, 128), (3, 192)] + [(i, 256) for i in range(4, configs.byte_len)],
+                 filters=[(1, 4), (2, 8), (3, 12)] + [(i, 4 * i) for i in range(4, configs.byte_len)],
                  highway_layers=2):
 
         # Pytorch will search for the most efficient convolution implementation
@@ -449,5 +456,6 @@ class Highway(torch.nn.Module):
             proj_x, gate = projection.chunk(2, dim=-1)
             proj_x = self.activation(proj_x)
             gate = torch.sigmoid(gate)
-            x = gate * x + (gate.new_tensor([1]) - gate) * proj_x
+            # x = gate * x + (gate.new_tensor([1]) - gate) * proj_x
+            x = gate * x + (torch.tensor([1]).cuda() - gate) * proj_x
         return x
