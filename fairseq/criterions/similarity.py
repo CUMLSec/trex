@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import itertools
+import random
 
 import torch
 import torch.nn.functional as F
@@ -88,7 +89,7 @@ class SimilarityCriterion(FairseqCriterion):
 
         logits = model.classification_heads[self.classification_pair_head_name](concat_in)
 
-        # target, 0 - not memory dependent, 1 - may alias
+        # target, 0 - not similar, 1 - similar
         targets_pair = (sample["target"] > 0).long()
 
         lprobs = F.log_softmax(logits, dim=-1, dtype=torch.float32)
@@ -110,6 +111,9 @@ class SimilarityCriterion(FairseqCriterion):
                                                            dim=1) > configs.cosine_embedding_loss_margin
         preds_pair = logits.argmax(dim=1)
         preds_pair_scaled = F.softmax(logits, dim=-1)[:, 1] * 2 - 1
+
+        if random.random() < 0.001:
+            print(preds_cosine, preds_pair_scaled, targets)
 
         logging_output['ncorrect_total_cosine'] = (preds_cosine_thresholded == targets_cosine_thresholded).sum().item()
         logging_output['ncorrect_cosine'] = ((preds_cosine_thresholded == targets_cosine_thresholded) * (
