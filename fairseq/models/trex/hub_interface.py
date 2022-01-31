@@ -3,14 +3,13 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+from itertools import product
+
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from fairseq import utils
-from fairseq.data import encoders
-
 from command import configs
+from fairseq.data import encoders
 
 
 class TrexHubInterface(nn.Module):
@@ -26,6 +25,9 @@ class TrexHubInterface(nn.Module):
         self.model = model
 
         self.bpe = encoders.build_bpe(cfg.bpe)
+
+        hexval = [str(i) for i in range(10)] + ['a', 'b', 'c', 'd', 'e', 'f']
+        self.real_bytes_idx = set(f'{i}{j}' for i, j in product(hexval, repeat=2))
 
         print('init hub')
         # this is useful for determining the device
@@ -48,7 +50,11 @@ class TrexHubInterface(nn.Module):
                         tokens[field].size(-1), self.model.max_positions()
                     )
                 )
-            tokens[field] = tokens[field].to(device=self.device).long()
+
+            if field in configs.non_byte_fields:
+                tokens[field] = tokens[field].to(device=self.device).long()
+            else:
+                tokens[field] = tokens[field].to(device=self.device).float()
 
         return tokens
 
@@ -62,10 +68,20 @@ class TrexHubInterface(nn.Module):
 
         token_dict = dict()
 
-        for field in configs.fields:
+        for field in configs.non_byte_fields:
             token_dict[field] = self.task.source_dictionary[field].encode_line(
                 sentence[field], append_eos=False, add_if_not_exist=False
             )
+
+        for field in configs.byte_fields:
+            output = torch.ones_like(token_dict[configs.static_field], dtype=torch.float16)
+            for i, byte in enumerate(sentence[field].split()):
+                if byte not in self.real_bytes_idx:
+                    output[i] = float(1)
+                else:
+                    output[i] = int(byte, 16) / 256
+
+            token_dict[field] = output
 
         return token_dict
 
