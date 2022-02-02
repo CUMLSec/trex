@@ -148,3 +148,4 @@ command/ablation
 command/syntia
 command/finetune_diverse
 command/case
+command/deploy
