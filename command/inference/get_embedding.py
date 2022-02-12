@@ -44,6 +44,8 @@ for sample_idx in range(top):
     sample1_tokens = trex.encode(sample1)
 
     sample0_emb = trex.process_token_dict(sample0_tokens)
+    print([f'{k}:{sample0_emb[k].size()}' for k in sample0_emb])
+    exit()
     sample1_emb = trex.process_token_dict(sample1_tokens)
 
     # emb0 = trex.predict('similarity', sample0_tokens)
