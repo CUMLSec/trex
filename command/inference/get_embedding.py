@@ -29,7 +29,7 @@ with open(f'data-src/similarity/valid.label', 'r') as f:
     for line in f:
         labels.append(float(line.strip()))
 
-top = 10000
+top = 2
 similarities = []
 
 tp_cosine = fp_cosine = fn_cosine = tn_cosine = 0
