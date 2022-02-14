@@ -7,7 +7,7 @@ import csv
 trex = TrexModel.from_pretrained(f'checkpoints/similarity',
                                  checkpoint_file='checkpoint_best.pt',
                                  data_name_or_path=f'data-bin/similarity')
-trex = trex.cuda()
+trex = trex.cpu()
 trex.eval()
 trex_script = torch.jit.script(trex.model)
 trex_script.save('checkpoints/similarity/trex.ptc')
@@ -44,8 +44,6 @@ for sample_idx in range(top):
     sample1_tokens = trex.encode(sample1)
 
     sample0_emb = trex.process_token_dict(sample0_tokens)
-    print([f'{k}:{sample0_emb[k].size()}' for k in sample0_emb])
-    exit()
     sample1_emb = trex.process_token_dict(sample1_tokens)
 
     # emb0 = trex.predict('similarity', sample0_tokens)

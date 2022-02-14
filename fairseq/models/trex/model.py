@@ -44,6 +44,13 @@ class TrexModel(FairseqEncoderModel):
 
         self.classification_heads = nn.ModuleDict()
 
+    # for torchscript
+    def similarity(self, emb: torch.Tensor):
+        return self.classification_heads.similarity(emb)
+
+    def similarity_pair(self, concat_in: torch.Tensor):
+        return self.classification_heads.similarity_pair(concat_in)
+
     @staticmethod
     def add_args(parser):
         """Add model-specific arguments to the parser."""

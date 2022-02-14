@@ -456,6 +456,6 @@ class Highway(torch.nn.Module):
             proj_x, gate = projection.chunk(2, dim=-1)
             proj_x = self.activation(proj_x)
             gate = torch.sigmoid(gate)
-            # x = gate * x + (gate.new_tensor([1]) - gate) * proj_x
-            x = gate * x + (torch.tensor([1]).cuda() - gate) * proj_x
+            x = gate * x + (torch.tensor([1]) - gate) * proj_x
+            # x = gate * x + (torch.tensor([1]).cuda() - gate) * proj_x
         return x
