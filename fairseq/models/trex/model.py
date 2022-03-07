@@ -44,10 +44,6 @@ class TrexModel(FairseqEncoderModel):
 
         self.classification_heads = nn.ModuleDict()
 
-    # for torchscript
-    def similarity(self, emb: torch.Tensor):
-        return self.classification_heads.similarity(emb)
-
     def similarity_pair(self, concat_in: torch.Tensor):
         return self.classification_heads.similarity_pair(concat_in)
 
@@ -235,7 +231,9 @@ class TrexModel(FairseqEncoderModel):
 
         # hacky workaround to deal with torchscript 'unable to extract string literal'
         if classification_head_name is not None:
-            x = {'features': self.classification_heads['similarity'](x['features'])}
+            x = {
+                'features': self.classification_heads.similarity(x['features'])
+            }
         return x, extra
 
     def get_normalized_probs(self, net_output, log_probs, sample=None):

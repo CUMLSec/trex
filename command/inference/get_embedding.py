@@ -9,9 +9,10 @@ trex = TrexModel.from_pretrained(f'checkpoints/similarity',
                                  data_name_or_path=f'data-bin/similarity')
 trex = trex.cpu()
 trex.eval()
-trex_script = torch.jit.script(trex.model)
-trex_script.save('checkpoints/similarity/trex.ptc')
-loaded = torch.jit.load('checkpoints/similarity/trex.ptc')
+# trex_script = torch.jit.script(trex.model)
+# trex_script.save('checkpoints/similarity/trex.ptc')
+# loaded = torch.jit.load('checkpoints/similarity/trex.ptc')
+loaded = trex.model
 
 samples0 = {field: [] for field in configs.fields}
 samples1 = {field: [] for field in configs.fields}
@@ -29,7 +30,7 @@ with open(f'data-src/similarity/valid.label', 'r') as f:
     for line in f:
         labels.append(float(line.strip()))
 
-top = 2
+top = 20
 similarities = []
 
 tp_cosine = fp_cosine = fn_cosine = tn_cosine = 0
@@ -49,25 +50,24 @@ for sample_idx in range(top):
     # emb0 = trex.predict('similarity', sample0_tokens)
     # emb1 = trex.predict('similarity', sample1_tokens)
 
-    emb0 = loaded(sample0_emb, features_only=True)[0]['features']
-    emb1 = loaded(sample1_emb, features_only=True)[0]['features']
-
-    emb0_mean = torch.mean(emb0, dim=1)
-    emb1_mean = torch.mean(emb1, dim=1)
+    emb0_rep = loaded(sample0_emb, features_only=True, classification_head_name='similarity')[0]['features']
+    emb1_rep = loaded(sample1_emb, features_only=True, classification_head_name='similarity')[0]['features']
+    # cosine similarity of function embedding
+    # emb0_rep = loaded.classification_heads.similarity(emb0)
+    # emb1_rep = loaded.classification_heads.similarity(emb1)
 
     # directly predict pair
-    concat_in = torch.cat((emb0_mean, emb1_mean, torch.abs(emb0_mean - emb1_mean), emb0_mean * emb1_mean), dim=-1)
-    logits = loaded.classification_heads.similarity_pair(concat_in)
-
-    # cosine similarity of function embedding
-    emb0_rep = loaded.classification_heads.similarity(emb0)
-    emb1_rep = loaded.classification_heads.similarity(emb1)
+    # emb0_mean = torch.mean(emb0, dim=1)
+    # emb1_mean = torch.mean(emb1, dim=1)
+    # concat_in = torch.cat((emb0_mean, emb1_mean, torch.abs(emb0_mean - emb1_mean), emb0_mean * emb1_mean), dim=-1)
+    # logits = loaded.classification_heads.similarity_pair(concat_in)
 
     # print(emb0_rep[0, :2], emb1_rep[0, :2])
     pred_cosine = torch.cosine_similarity(emb0_rep, emb1_rep)[0].item()
-    pred_pair = logits.argmax(dim=1).item()
+    # pred_pair = logits.argmax(dim=1).item()
 
-    similarities.append([pred_cosine, pred_pair, label])
+    # similarities.append([pred_cosine, pred_pair, label])
+    similarities.append([pred_cosine, label])
 
 with open('result/similarity.csv', 'w') as f:
     writer = csv.writer(f)
