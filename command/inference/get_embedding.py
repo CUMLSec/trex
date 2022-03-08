@@ -9,10 +9,10 @@ trex = TrexModel.from_pretrained(f'checkpoints/similarity',
                                  data_name_or_path=f'data-bin/similarity')
 trex = trex.cpu()
 trex.eval()
-# trex_script = torch.jit.script(trex.model)
-# trex_script.save('checkpoints/similarity/trex.ptc')
-# loaded = torch.jit.load('checkpoints/similarity/trex.ptc')
-loaded = trex.model
+trex_script = torch.jit.script(trex.model)
+trex_script.save('checkpoints/similarity/trex.ptc')
+loaded = torch.jit.load('checkpoints/similarity/trex.ptc')
+# loaded = trex.model
 
 samples0 = {field: [] for field in configs.fields}
 samples1 = {field: [] for field in configs.fields}

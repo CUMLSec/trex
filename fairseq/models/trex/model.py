@@ -220,6 +220,7 @@ class TrexModel(FairseqEncoderModel):
     def forward(
             self,
             src_tokens: Dict[str, torch.Tensor],
+            src_lengths: Optional[torch.Tensor] = None,
             features_only: bool = False,
             return_all_hiddens: bool = False,
             classification_head_name: Optional[str] = None
@@ -227,7 +228,7 @@ class TrexModel(FairseqEncoderModel):
         if classification_head_name is not None:
             features_only = True
 
-        x, extra = self.encoder(src_tokens, features_only, return_all_hiddens)
+        x, extra = self.encoder(src_tokens, src_lengths, features_only, return_all_hiddens)
 
         # hacky workaround to deal with torchscript 'unable to extract string literal'
         if classification_head_name is not None:
@@ -562,6 +563,7 @@ class Encoder(FairseqEncoder):
     def forward(
             self,
             src_tokens: Dict[str, torch.Tensor],
+            src_lengths: Optional[torch.Tensor] = None,
             features_only: bool = False,
             return_all_hiddens: bool = False,
             masked_code: torch.Tensor = torch.tensor([]),
@@ -570,6 +572,7 @@ class Encoder(FairseqEncoder):
         """
         Args:
             src_tokens (LongTensor): input tokens of shape `(batch, src_len)`
+            src_lengths (LongTensor): input tokens length
             features_only (bool, optional): skip LM head and just return
                 features. If True, the output will be of shape
                 `(batch, src_len, embed_dim)`.
@@ -590,7 +593,9 @@ class Encoder(FairseqEncoder):
             x = self.output_layer(x, masked_code=masked_code, masked_value=masked_value)
         return x, extra
 
-    def extract_features(self, src_tokens: Dict[str, torch.Tensor], return_all_hiddens: bool = False):
+    def extract_features(self,
+                         src_tokens: Dict[str, torch.Tensor],
+                         return_all_hiddens: bool = False):
         encoder_out = self.sentence_encoder(
             src_tokens,
             return_all_hiddens=return_all_hiddens,
