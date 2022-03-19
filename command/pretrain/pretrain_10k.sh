@@ -15,7 +15,7 @@ ENCODER_EMB_DIM=768
 ENCODER_LAYERS=8
 ENCODER_ATTENTION_HEADS=12
 
-CUDA_VISIBLE_DEVICES=0 python train.py \
+CUDA_VISIBLE_DEVICES=1 python train.py \
   data-bin/pretrain_10k \
   --task trex --criterion trex \
   --arch trex --sample-break-mode eos --tokens-per-sample $TOKENS_PER_SAMPLE \
@@ -26,7 +26,7 @@ CUDA_VISIBLE_DEVICES=0 python train.py \
   --max-update $TOTAL_UPDATES --log-format json --log-interval 10 \
   --no-epoch-checkpoints --save-dir checkpoints/pretrain_10k/ \
   --encoder-layers $ENCODER_LAYERS --encoder-embed-dim $ENCODER_EMB_DIM --encoder-attention-heads $ENCODER_ATTENTION_HEADS \
-  --random-token-prob 0.2 --mask-prob 0.2 \
+  --random-token-prob 0.5 --mask-prob 0.2 \
   --memory-efficient-fp16 --batch-size-valid 32 \
   --restore-file checkpoints/pretrain_10k/checkpoint_best.pt |
   tee result/pretrain_10k

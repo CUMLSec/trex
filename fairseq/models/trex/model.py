@@ -223,12 +223,14 @@ class TrexModel(FairseqEncoderModel):
             src_lengths: Optional[torch.Tensor] = None,
             features_only: bool = False,
             return_all_hiddens: bool = False,
-            classification_head_name: Optional[str] = None
+            classification_head_name: Optional[str] = None,
+            masked_code: Optional[torch.Tensor] = None,
+            masked_value: Optional[torch.Tensor] = None
     ):
         if classification_head_name is not None:
             features_only = True
 
-        x, extra = self.encoder(src_tokens, src_lengths, features_only, return_all_hiddens)
+        x, extra = self.encoder(src_tokens, src_lengths, features_only, return_all_hiddens, masked_code, masked_value)
 
         # hacky workaround to deal with torchscript 'unable to extract string literal'
         if classification_head_name is not None:
@@ -402,7 +404,7 @@ class TrexLMClassificationHead(nn.Module):
         self.weight = weight
         self.bias = nn.Parameter(torch.zeros(output_dim))
 
-    def forward(self, features, masked_tokens: torch.Tensor):
+    def forward(self, features, masked_tokens: Optional[torch.Tensor] = None):
         # Only project the masked tokens while training,
         # saves both memory and computation
         # if masked_tokens is not None:
@@ -431,7 +433,7 @@ class TrexLMValueRegressionHead(nn.Module):
         self.weight = weight
         self.bias = nn.Parameter(torch.zeros(output_dim))
 
-    def forward(self, features, masked_tokens):
+    def forward(self, features, masked_tokens: Optional[torch.Tensor] = None):
         # Only project the masked tokens while training,
         # saves both memory and computation
         # if masked_tokens is not None:
@@ -566,8 +568,8 @@ class Encoder(FairseqEncoder):
             src_lengths: Optional[torch.Tensor] = None,
             features_only: bool = False,
             return_all_hiddens: bool = False,
-            masked_code: torch.Tensor = torch.tensor([]),
-            masked_value: torch.Tensor = torch.tensor([])
+            masked_code: Optional[torch.Tensor] = None,
+            masked_value: Optional[torch.Tensor] = None
     ):
         """
         Args:
@@ -593,9 +595,7 @@ class Encoder(FairseqEncoder):
             x = self.output_layer(x, masked_code=masked_code, masked_value=masked_value)
         return x, extra
 
-    def extract_features(self,
-                         src_tokens: Dict[str, torch.Tensor],
-                         return_all_hiddens: bool = False):
+    def extract_features(self, src_tokens: Dict[str, torch.Tensor], return_all_hiddens: bool = False):
         encoder_out = self.sentence_encoder(
             src_tokens,
             return_all_hiddens=return_all_hiddens,
@@ -607,7 +607,11 @@ class Encoder(FairseqEncoder):
         # for torchscript, has to be dictionary
         return {'features': features}, {"inner_states": inner_states}
 
-    def output_layer(self, features: Dict[str, torch.Tensor], masked_code: torch.Tensor, masked_value: torch.Tensor):
+    def output_layer(self,
+                     features: Dict[str, torch.Tensor],
+                     masked_code: Optional[torch.Tensor] = None,
+                     masked_value: Optional[torch.Tensor] = None
+                     ):
         return {
             'code': self.lm_code_head(features['features'], masked_code),
             'value': self.lm_value_head(features['features'], masked_value)
